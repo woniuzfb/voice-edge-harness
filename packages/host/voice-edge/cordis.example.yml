@@ -1,0 +1,34 @@
+# Minimal Voice Edge composition: the bridge plus the services it injects.
+# Merge these rows into the cordis.yml of the Harness app that should host
+# the bridge (or include this file from one). `token` must match
+# VOICE_EDGE_HARNESS_TOKEN in the voice_edge.py environment.
+
+- id: webserver
+  name: '@deepseek-ai/dsh-host-webserver'
+  config:
+    host: '127.0.0.1'
+    port: 3080
+
+# Agent factory provider — ctx.agents.create() delegates to the factory the
+# loop registers. Any agent-loop assembly works; the bridge's agents never
+# drive a model, so provider/model options are irrelevant for them.
+- id: agent-loop
+  name: '@deepseek-ai/dsh-agent-loop'
+
+# Approval service so guarded tools can be answered; the bridge answers
+# 'allowed-once' for its own agents only (config.autoApprove).
+- id: approval
+  name: '@deepseek-ai/dsh-user-approval'
+
+# Durable mirror: without a persistence backend, session events stay in
+# memory and turn/finish reports flushed: false.
+- id: persistence
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: './.sessions'
+
+- id: voice-edge
+  name: '@deepseek-ai/dsh-voice-edge'
+  config:
+    path: /api/voice-edge
+    token: replace-with-a-local-secret

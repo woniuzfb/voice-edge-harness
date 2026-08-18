@@ -60,5 +60,10 @@ export const KNOWN_SESSION_EVENT_TYPES: ReadonlySet<string> = new Set([
   'turn/end',
   'turn/start',
   'user/message',
+  'voice-edge/finish',
+  'voice-edge/model-event',
+  'voice-edge/sync',
+  'voice-edge/tool-call',
+  'voice-edge/tool-result',
   'web/deepseek-search-llm-request',
 ])

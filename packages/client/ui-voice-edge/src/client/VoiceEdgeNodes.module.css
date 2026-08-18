@@ -1,0 +1,108 @@
+.userRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.userStack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 0;
+  max-width: min(525px, 82%);
+}
+
+.userBubble {
+  max-width: 100%;
+  padding: 10px 16px;
+  overflow-wrap: anywhere;
+  border-radius: 22px;
+  background: var(--dsw-specific-bubble);
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-markdown-code);
+  white-space: pre-wrap;
+}
+
+.assistantRow {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  max-width: min(680px, 100%);
+}
+
+.assistantText {
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-primary);
+  font-size: 16px;
+  line-height: 28px;
+  white-space: pre-wrap;
+}
+
+.reasoning {
+  padding: 8px 12px;
+  border-left: 2px solid var(--dsw-alias-border, var(--dsw-alias-label-tertiary));
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.reasoningLabel {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.toolRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(680px, 100%);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.toolHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolName {
+  font: var(--dsw-font-markdown-code);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolStatus {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-specific-bubble);
+}
+
+.toolStatusError {
+  color: var(--dsw-alias-danger, #d85a30);
+}
+
+.toolBody {
+  color: var(--dsw-alias-label-secondary);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

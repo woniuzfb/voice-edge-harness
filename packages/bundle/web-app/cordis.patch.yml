@@ -215,6 +215,10 @@
     - id: ui-deliverables
       name: '@deepseek-ai/dsh-client-ui-deliverables'
 
+    # Voice Edge mirror rows: user/assistant bubbles and Harness tool rows for
+    # `voice-edge/*` session events; without it a bridged conversation is blank.
+    - id: ui-voice-edge
+      name: '@deepseek-ai/dsh-client-ui-voice-edge'
 
     - id: ui-workspace
       name: '@deepseek-ai/dsh-client-ui-workspace'

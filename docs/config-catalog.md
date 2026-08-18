@@ -2843,6 +2843,46 @@ export type ApprovalPolicy = 'ask' | 'never'
 
 Source: [`packages/interaction/user-approval/src/index.ts:177`](../packages/interaction/user-approval/src/index.ts)
 
+<a id="deepseek-aidsh-voice-edge"></a>
+
+## `@deepseek-ai/dsh-voice-edge`
+
+Requires: `webServer` · `agents` · `tools` · `sessions`
+
+```ts config-catalog
+/** Plugin configuration. The token is the only required value. */
+export interface Config {
+  /** Absolute route prefix the API is mounted under. */
+  path: string
+  /** Shared secret voice_edge.py presents as `Authorization: Bearer`. */
+  token: string
+  /**
+   * Answer `approval/request` for voice-edge-owned agents with
+   * `allowed-once`. Voice Edge turns are non-interactive — there is no user
+   * at this bridge to answer an ask — so a policy of `ask` would otherwise
+   * fail closed and deny every guarded tool.
+   */
+  autoApprove: boolean
+  /** Fallback working directory for created agents (request `cwd` wins). */
+  cwd?: string
+  /**
+   * Agent preset every created conversation joins, overriding the roster
+   * default. Ignored when no `agentPresets` service is composed — such
+   * deployments (e.g. the base-only profile) expose model-facing tools in the
+   * host layer, where every agent already sees them.
+   */
+  preset?: string
+  /** Request body cap in bytes. */
+  maxBodyBytes: number
+  /** Wall-clock budget for one tool execution. */
+  toolTimeoutMs: number
+  /** Bound on live conversations; least-recently-used are disposed. */
+  maxConversations: number
+}
+```
+
+Source: [`packages/host/voice-edge/src/index.ts:52`](../packages/host/voice-edge/src/index.ts)
+
 <a id="deepseek-aidsh-web"></a>
 
 ## `@deepseek-ai/dsh-web`
@@ -3058,6 +3098,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-tool` ([`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-trajectory` ([`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-user-questions` ([`packages/client/ui-user-questions/src/index.ts`](../packages/client/ui-user-questions/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-voice-edge` ([`packages/client/ui-voice-edge/src/index.ts`](../packages/client/ui-voice-edge/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workflow-run` ([`packages/client/ui-workflow-run/src/index.ts`](../packages/client/ui-workflow-run/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-workspace` ([`packages/client/ui-workspace/src/index.ts`](../packages/client/ui-workspace/src/index.ts))
 - `@deepseek-ai/dsh-command-compact` — requires `commands` · `compaction` ([`packages/compaction/command-compact/src/index.ts`](../packages/compaction/command-compact/src/index.ts))

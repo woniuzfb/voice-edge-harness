@@ -93,6 +93,9 @@
       "path": "../directory-picker"
     },
     {
+      "path": "../voice-edge"
+    },
+    {
       "path": "../../extensions/cordis-host-runner"
     },
     {

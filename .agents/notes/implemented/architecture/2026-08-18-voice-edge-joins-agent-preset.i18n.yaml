@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-18-voice-edge-joins-agent-preset.md
+2026-08-18-voice-edge-joins-agent-preset.md: 6ad2af6e05e9c644230099246aca46c2f101d6dc
+2026-08-18-voice-edge-joins-agent-preset.zh.md: e69232daf61e272e3da31532dce18b183d7d3206

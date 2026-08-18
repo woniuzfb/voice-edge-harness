@@ -932,6 +932,101 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/core/session/src/types.ts:264`](../packages/core/session/src/types.ts)
 
+### `voice-edge/*`
+
+<a id="voice-edgefinish--log-only"></a>
+
+#### `voice-edge/finish` — log-only
+
+```ts persistence-catalog
+/** voice_edge.py finished the turn; paired with a durability flush. */
+'voice-edge/finish': {
+  sequence: number
+  status: string
+}
+```
+
+来源：[`packages/host/voice-edge/src/types.ts:57`](../packages/host/voice-edge/src/types.ts)
+
+<a id="voice-edgemodel-event--log-only"></a>
+
+#### `voice-edge/model-event` — log-only
+
+```ts persistence-catalog
+/**
+ * One model step observed by voice_edge.py (assistant text, reasoning,
+ * parsed tool calls, finish reason). Log-only mirror of the external
+ * model stream; the Harness agent owning this session never drives a
+ * model itself.
+ */
+'voice-edge/model-event': {
+  sequence: number
+  kind: string
+  text?: string
+  reasoning?: string
+  toolCalls?: VoiceEdgeToolCallMirror[]
+  finishReason?: string
+}
+```
+
+来源：[`packages/host/voice-edge/src/types.ts:33`](../packages/host/voice-edge/src/types.ts)
+
+<a id="voice-edgesync--log-only"></a>
+
+#### `voice-edge/sync` — log-only
+
+```ts persistence-catalog
+/**
+ * One voice_edge.py turn was bound to this Harness session. `messages` is
+ * a bounded role/text projection of the client history at sync time — a
+ * diagnostic mirror, never a model-context source. `bootKey`/`fullKey`
+ * are the voice-edge identity hashes aliased to this session.
+ */
+'voice-edge/sync': {
+  requestId: string
+  model: string
+  messageCount: number
+  messages: VoiceEdgeMessageProjection[]
+  bootKey?: string
+  fullKey?: string
+}
+```
+
+来源：[`packages/host/voice-edge/src/types.ts:19`](../packages/host/voice-edge/src/types.ts)
+
+<a id="voice-edgetool-call--log-only"></a>
+
+#### `voice-edge/tool-call` — log-only
+
+```ts persistence-catalog
+/** A Harness tool call dispatched by voice_edge.py, before execution. */
+'voice-edge/tool-call': {
+  callId: string
+  name: string
+  arguments: JsonValue
+}
+```
+
+来源：[`packages/host/voice-edge/src/types.ts:42`](../packages/host/voice-edge/src/types.ts)
+
+<a id="voice-edgetool-result--log-only"></a>
+
+#### `voice-edge/tool-result` — log-only
+
+```ts persistence-catalog
+/** The settled outcome paired to `voice-edge/tool-call` by `callId`. */
+'voice-edge/tool-result': {
+  callId: string
+  name: string
+  isError: boolean
+  /** Flattened model-facing text of the result content blocks. */
+  text: string
+  durationMs: number
+}
+```
+
+来源：[`packages/host/voice-edge/src/types.ts:48`](../packages/host/voice-edge/src/types.ts)
+
 ### `web/*`
 
 <a id="webdeepseek-search-llm-request--log-only"></a>
