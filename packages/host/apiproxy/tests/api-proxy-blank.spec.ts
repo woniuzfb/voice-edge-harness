@@ -1,10 +1,12 @@
 /**
- * The summary blank bit means "conversation not started" (no turn has run),
- * not "log empty": standalone plugin events — command lifecycle records,
- * plan/mode, permission knob events, session titles — never flip it, so running /plan or /goal on a
+ * The summary blank bit means "conversation not started" (no turn has run,
+ * and no mirrored voice-edge sync has arrived), not "log empty": standalone
+ * plugin events — command lifecycle records, plan/mode, permission knob
+ * events, session titles — never flip it, so running /plan or /goal on a
  * fresh session keeps it list-hidden and reusable, while the first accepted
- * prompt's turn/start clears it. The host/session-added frame shares the
- * same predicate function (covered by the workspace spec's frame assertion).
+ * prompt's turn/start (or a mirror session's first voice-edge/sync) clears
+ * it. The host/session-added frame shares the same predicate function
+ * (covered by the workspace spec's frame assertion).
  */
 
 import { describe, expect, it } from 'vitest'
@@ -15,10 +17,11 @@ import SessionStore from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { CommandId } from '@deepseek-ai/dsh-commands/brand'
-// Side-effect type imports: the knob-event SessionEventMap merges.
+// Side-effect type imports: the knob-event and mirror SessionEventMap merges.
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import type {} from '@deepseek-ai/dsh-user-approval'
+import type {} from '@deepseek-ai/dsh-voice-edge/types'
 import type { ApiProxy, RpcRequest } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { createApiProxy } from '@deepseek-ai/dsh-host-apiproxy'
@@ -80,6 +83,22 @@ describe('summary blank = conversation not started', () => {
     attach(session)
     appendStandalone(session)
     session.append('turn/start', { turn: 0 })
+    expect(await listBlank(api, session.id)).toBe(false)
+  })
+
+  it('a mirrored voice-edge sync clears blank without any harness turn', async () => {
+    const { ctx, api, attach } = await harness()
+    const session = ctx.sessions.create()
+    attach(session)
+    appendStandalone(session)
+    // Mirror sessions never run a harness turn; the first sync binds the
+    // external conversation and is their conversation-start marker.
+    session.append('voice-edge/sync', {
+      requestId: 'blank-sync-1',
+      model: 'm',
+      messageCount: 1,
+      messages: [{ role: 'user', text: 'hello' }],
+    })
     expect(await listBlank(api, session.id)).toBe(false)
   })
 })

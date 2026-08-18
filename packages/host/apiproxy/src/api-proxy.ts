@@ -88,6 +88,9 @@ import type { ApprovalOutcome, ApprovalRequestId } from '@deepseek-ai/dsh-user-a
 // Side-effect type import: resolves the `approval/request` waterfall and
 // `ctx.get('approval')` without a value dependency on the seam (optional composition).
 import type {} from '@deepseek-ai/dsh-user-approval'
+// Side-effect type import: merges the voice-edge mirror events into
+// SessionEventMap so the conversation-start predicate below typechecks (optional composition).
+import type {} from '@deepseek-ai/dsh-voice-edge/types'
 import { approvalResponsePayloadSchema } from './api/approvals.schema.ts'
 import { imageLimitsProjectionSchema, sessionListMetadataProjectionSchema } from './api/sessions.schema.ts'
 import { questionResponsePayloadSchema } from './api/questions.schema.ts'
@@ -467,19 +470,32 @@ function jobViews(snapshots: readonly JobSnapshot[]): JobView[] {
 }
 
 /**
- * Whether the session's conversation has started: no turn has run yet (a
- * turn is one model-loop execution). Standalone plugin events — command
- * lifecycle records, plan/mode, titles, goals — never open a turn, so
- * running `/plan` or `/goal` on a fresh session keeps it blank
- * (list-hidden, reusable).
+ * Event types whose first arrival means the session's conversation has
+ * started. `turn/start` covers a harness model-loop turn (a turn is one
+ * model-loop execution); `voice-edge/sync` covers a session that only
+ * mirrors an external model loop — the sync is the first event of every
+ * mirrored turn, so the mirrored history counts as a started conversation
+ * even though no harness turn ever runs. Standalone plugin events — command
+ * lifecycle records, plan/mode, titles, goals — never start one, so running
+ * `/plan` or `/goal` on a fresh session keeps it blank (list-hidden,
+ * reusable).
+ */
+const CONVERSATION_START_EVENTS: ReadonlySet<SessionEvent['type']> = new Set([
+  'turn/start',
+  'voice-edge/sync',
+])
+
+/**
+ * Whether the session's conversation has started (see
+ * {@link CONVERSATION_START_EVENTS}).
  */
 function sessionBlank(session: Session): boolean {
-  return !session.events.some(event => event.type === 'turn/start')
+  return !session.events.some(event => CONVERSATION_START_EVENTS.has(event.type))
 }
 
 /** Advance the Session-list hint projection by one committed event. */
 function applySessionListMetadata(state: SessionListMetadata, event: SessionEvent): SessionListMetadata {
-  const blank = state.blank && event.type !== 'turn/start'
+  const blank = state.blank && !CONVERSATION_START_EVENTS.has(event.type)
   const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
     ? event.time
     : state.lastPromptAt

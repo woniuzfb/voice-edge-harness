@@ -19,6 +19,8 @@ import {
   InvalidPresetIdError, PresetExistsError, resolveSessionPreset, UnknownPresetError,
 } from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
+// Side-effect type import: merges the voice-edge mirror events into SessionEventMap.
+import type {} from '@deepseek-ai/dsh-voice-edge/types'
 import { GoalId } from '@deepseek-ai/dsh-goal'
 import { createApiProxy } from '../src/api-proxy.ts'
 import { describe, expect, it } from 'vitest'
@@ -436,6 +438,27 @@ describe('agentPreset.select', () => {
 
     const response = await api.agentPresets.select(
       request({ sessionId: SessionId('sel-2'), agentPreset: 'minimal' }))
+
+    expect(response.result.ok).toBe(false)
+    if (response.result.ok) throw new Error('unreachable')
+    expect(response.result.error.code).toBe('agent-preset-locked')
+  })
+
+  it('refuses once a mirrored voice-edge sync has bound the session', async () => {
+    const { api, ctx } = await harness(['standard', 'minimal'])
+    await api.sessions.create(request({ sessionId: SessionId('sel-mirror'), agentPreset: 'standard' }))
+    // A mirror session never runs a harness turn; its first voice-edge/sync
+    // binds an external conversation, and a swap would strand that
+    // conversation's tool calls like any started history.
+    ctx.sessions.get(SessionId('sel-mirror'))?.append('voice-edge/sync', {
+      requestId: 'sel-mirror-1',
+      model: 'm',
+      messageCount: 0,
+      messages: [],
+    })
+
+    const response = await api.agentPresets.select(
+      request({ sessionId: SessionId('sel-mirror'), agentPreset: 'minimal' }))
 
     expect(response.result.ok).toBe(false)
     if (response.result.ok) throw new Error('unreachable')

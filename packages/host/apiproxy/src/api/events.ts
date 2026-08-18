@@ -114,6 +114,8 @@ export type MuxFrame =
  * constantly true — clients flip it on the session's first
  * `host/session-status(running:true)` (a blank session never runs), and a
  * reconnecting client takes `session.list`'s summary.blank as authoritative.
+ * Blankness means "conversation not started": a `turn/start`, or a mirror
+ * session's first `voice-edge/sync`, clears it.
  * agent-error is the only outlet for live failures with no turn position;
  * workspace-changed pushes the full new snapshot after every durable
  * workspace mutation (create/attach/order change — the client upserts, while
