@@ -12,7 +12,7 @@ Status: implemented
 
 ## Decision
 
-一个共享判定 `CONVERSATION_START_EVENTS` 同时列出两个标记：`turn/start`（一次 Harness 模型循环 turn）与 `voice-edge/sync`（每个镜像 turn 的首个事件——`/session/sync` 是强制入口，其他端点缺它一律 409，因此已绑定的镜像必有该事件）。两条 blank 路径与 preset 锁都读它。`dsh-host-apiproxy` 对 `@deepseek-ai/dsh-voice-edge/types` 增加一个仅类型的依赖以完成 `SessionEventMap` 合并，沿用该包既有的 side-effect 类型导入。
+一个共享判定 `CONVERSATION_START_EVENTS` 同时列出两个标记：`turn/start`（一次 Harness 模型循环 turn）与 `voice-edge/sync`（客户端每个镜像 turn 交付一次的 user-turn 事件——`/session/bind` 是强制入口，其他端点缺它一律 409，且客户端每 turn 都会交付该事件）。两条 blank 路径与 preset 锁都读它。`dsh-host-apiproxy` 对 `@deepseek-ai/dsh-voice-edge/types` 增加一个仅类型的依赖以完成 `SessionEventMap` 合并，沿用该包既有的 side-effect 类型导入。
 
 ## Alternatives considered
 

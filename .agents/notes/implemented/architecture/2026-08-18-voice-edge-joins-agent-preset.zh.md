@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-voice-edge 桥接绑定的每个会话都通过 `ctx.agents.create` 创建 Harness agent，且不加入任何 preset。这个 agent 能否看到工具取决于部署的哪一层持有工具：无 roster 的组合（base-only profile）把模型可见的工具行放在 host 层，任何 agent 都能看到；而 preset 持有的组合——web app 是已发布的这类——禁用了那些工具行，改为按会话通过 preset 常驻挂载暴露工具。在 presets 体系之外创建的 voice-edge agent 什么也没加入，于是 `dsh web` 上 `session/sync` 返回 `tools: []`，`tool/execute` 无工具可执行。桥接的镜像一半正常，工具一半静默缺失——对调用方无法区分"空 roster"和"组装错误"的桥来说，这是最坏的形态。
+voice-edge 桥接绑定的每个会话都通过 `ctx.agents.create` 创建 Harness agent，且不加入任何 preset。这个 agent 能否看到工具取决于部署的哪一层持有工具：无 roster 的组合（base-only profile）把模型可见的工具行放在 host 层，任何 agent 都能看到；而 preset 持有的组合——web app 是已发布的这类——禁用了那些工具行，改为按会话通过 preset 常驻挂载暴露工具。在 presets 体系之外创建的 voice-edge agent 什么也没加入，于是 `dsh web` 上 `session/bind` 返回 `tools: []`，`tool/execute` 无工具可执行。桥接的镜像一半正常，工具一半静默缺失——对调用方无法区分"空 roster"和"组装错误"的桥来说，这是最坏的形态。
 
 ## Decision
 
@@ -26,7 +26,7 @@ voice-edge 桥接绑定的每个会话都通过 `ctx.agents.create` 创建 Harne
 
 ## Consequences
 
-- 在 `dsh web` 上，`session/sync` 现在返回 preset 的工具目录，`tool/execute` 为语音会话执行真实工具；web profile 的 patch 不需要 `preset` 值，除非想用非默认 preset。
+- 在 `dsh web` 上，`session/bind` 现在返回 preset 的工具目录，`tool/execute` 为语音会话执行真实工具；web profile 的 patch 不需要 `preset` 值，除非想用非默认 preset。
 - 无 roster 部署的行为逐字节不变；没有 `agentPresets` 服务时新配置字段不起作用。
 - 有 roster 组装的 voice-edge 会话 header 现在记录 `agentPreset`，preset 感知的工具（侧栏、`resolveSessionPreset` 的读者）能读懂这些会话。
 - persistence catalog、`KNOWN_SESSION_EVENT_TYPES` 和 host 包 README 现在列出 voice-edge 的事件与包行；重新生成它们属于本变更，不是后续工作。

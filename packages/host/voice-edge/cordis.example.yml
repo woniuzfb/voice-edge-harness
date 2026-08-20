@@ -21,7 +21,7 @@
   name: '@deepseek-ai/dsh-user-approval'
 
 # Durable mirror: without a persistence backend, session events stay in
-# memory and turn/finish reports flushed: false.
+# memory and a voice-edge/finish event reports flushed: false.
 - id: persistence
   name: '@deepseek-ai/dsh-session-persistence-jsonl'
   config:

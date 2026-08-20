@@ -2881,7 +2881,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/voice-edge/src/index.ts:52`](../packages/host/voice-edge/src/index.ts)
+Source: [`packages/host/voice-edge/src/index.ts:56`](../packages/host/voice-edge/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 

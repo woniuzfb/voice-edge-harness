@@ -2883,7 +2883,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/voice-edge/src/index.ts:52`](../packages/host/voice-edge/src/index.ts)
+来源：[`packages/host/voice-edge/src/index.ts:54`](../packages/host/voice-edge/src/index.ts)
 
 <a id="deepseek-aidsh-web"></a>
 

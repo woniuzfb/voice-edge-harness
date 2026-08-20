@@ -6,7 +6,7 @@ English | [中文](2026-08-18-voice-edge-joins-agent-preset.zh.md)
 
 ## Problem
 
-Every conversation the voice-edge bridge binds creates its Harness agent through `ctx.agents.create` with no preset join. Whether that agent sees tools depends on which layer of the deployment owns them: rosterless compositions (the base-only profile) expose model-facing tool rows in the host layer, where any agent sees them, but preset-owned compositions — the web app is the shipped one — disable those rows and expose tools per session through a preset standing mount. A voice-edge agent created outside the presets system joined nothing, so `session/sync` answered `tools: []` on `dsh web` and `tool/execute` had nothing to execute. The mirror half of the bridge worked; the tool half was silently absent, which is the worst shape for a bridge whose caller cannot tell an empty roster from a miscomposed one.
+Every conversation the voice-edge bridge binds creates its Harness agent through `ctx.agents.create` with no preset join. Whether that agent sees tools depends on which layer of the deployment owns them: rosterless compositions (the base-only profile) expose model-facing tool rows in the host layer, where any agent sees them, but preset-owned compositions — the web app is the shipped one — disable those rows and expose tools per session through a preset standing mount. A voice-edge agent created outside the presets system joined nothing, so `session/bind` answered `tools: []` on `dsh web` and `tool/execute` had nothing to execute. The mirror half of the bridge worked; the tool half was silently absent, which is the worst shape for a bridge whose caller cannot tell an empty roster from a miscomposed one.
 
 ## Decision
 
@@ -26,7 +26,7 @@ Fixing this surfaced a latent registration gap: `packages/host/voice-edge` was m
 
 ## Consequences
 
-- On `dsh web`, `session/sync` now returns the preset's tool catalog and `tool/execute` runs real tools for voice conversations; the web profile's patch needs no `preset` value unless it wants a non-default preset.
+- On `dsh web`, `session/bind` now returns the preset's tool catalog and `tool/execute` runs real tools for voice conversations; the web profile's patch needs no `preset` value unless it wants a non-default preset.
 - Rosterless deployments are byte-for-byte unchanged in behavior; the new config field is inert without an `agentPresets` service.
 - A voice-edge session header now records `agentPreset` whenever a roster composed it, which makes those sessions legible to preset-aware tooling (the sidebar, `resolveSessionPreset` readers).
 - The persistence catalog, `KNOWN_SESSION_EVENT_TYPES`, and the host package README now list the voice-edge events and package row; regenerating them is part of this change, not a follow-up.

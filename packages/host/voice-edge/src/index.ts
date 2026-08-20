@@ -3,17 +3,19 @@
  * `config.path` (default `/api/voice-edge`) on the composed `webServer`
  * service so an external voice_edge.py process can:
  *
- *   1. bind one of its conversations to a Harness session (`session/sync`),
+ *   1. bind one of its conversations to a Harness session (`session/bind`),
  *      receiving the Harness tool schemas visible to that session's agent;
- *   2. mirror external model steps into the session log (`model/event`);
- *   3. execute Harness tools as that agent (`tool/execute`);
- *   4. close the turn and force a durability checkpoint (`turn/finish`).
+ *   2. append one mirror event — user turn, model step, finish — into the
+ *      session log (`event`);
+ *   3. execute Harness tools as that agent (`tool/execute`).
  *
  * Boundary contract: the plugin never returns model context (no messages, no
  * system prompt, no assembled history) — voice_edge.py remains the sole owner
- * of the model request and of the client-visible output. The Harness agent
- * created per conversation is a scope and session container only; the plugin
- * never submits inbox work, so its loop never runs a model.
+ * of the model request and of the client-visible output, and every mirror
+ * append is content the client explicitly delivered. The plugin's own log
+ * writes are only the tool-call/tool-result pairs of executions it performed.
+ * The Harness agent created per conversation is a scope and session container
+ * only; the plugin never submits inbox work, so its loop never runs a model.
  * @module @deepseek-ai/dsh-voice-edge
  */
 
@@ -24,6 +26,8 @@ import z from '@deepseek-ai/schemastery'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
+import { normalizeSessionTitle, SessionTitleProviderId } from '@deepseek-ai/dsh-session-title'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 // Type-only edges: resolve the `webServer` and `agentPresets` Context service
@@ -35,13 +39,12 @@ import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {
   VoiceEdgeAck,
+  VoiceEdgeBindRequest,
   VoiceEdgeError,
+  VoiceEdgeEventRequest,
   VoiceEdgeMessageProjection,
-  VoiceEdgeModelEventRequest,
-  VoiceEdgeSyncRequest,
   VoiceEdgeToolExecuteRequest,
   VoiceEdgeToolResult,
-  VoiceEdgeTurnFinishRequest,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -103,6 +106,12 @@ interface Conversation {
   sequence: number
   /** Serializes tool executions so log pairs never interleave. */
   chain: Promise<unknown>
+  /**
+   * Active Continue generate-title turn: the instruction arrived but the turn
+   * has not finished. Mirror events are withheld (the turn is not conversation
+   * content) and the last step text becomes the title at finish.
+   */
+  titleTurn?: { text: string } | undefined
   touched: number
 }
 
@@ -117,11 +126,34 @@ class HttpError extends Error {
   }
 }
 
-/** Per-message mirror caps: the sync event is diagnostic, not a datastore. */
-const SYNC_MAX_MESSAGES = 50
-const SYNC_MAX_MESSAGE_CHARS = 4000
-/** Model-event text mirror caps. */
-const EVENT_MAX_TEXT_CHARS = 16_000
+/** Mirror texts are stored verbatim: `config.maxBodyBytes` is the single size
+ * bound, enforced at the HTTP wire — the log never truncates what arrived. */
+
+/** Placeholder title every voice-edge session carries until a generated or user title lands. */
+const DEFAULT_TITLE = 'voice-edge'
+/** UTF-8 byte budget for generated titles; Continue asks the model for 3-4 words. */
+const TITLE_MAX_BYTES = 200
+
+/**
+ * Continue's generateTitle request rides the same conversation as an ordinary
+ * fresh user turn: the fixed instruction opens the text and the conversation
+ * content follows. The model's reply is the title itself, so the turn never
+ * mirrors into the log — it folds into `session/title` at finish.
+ */
+function isTitleGenerationPrompt(text: string): boolean {
+  return text.startsWith('Given the following') && text.includes('please reply with a title')
+}
+
+/**
+ * A generated title only replaces the placeholder: once a real title stands —
+ * an earlier generation, or an explicit user rename, which pins — the session
+ * keeps it.
+ */
+function generatedTitleApplies(session: Session): boolean {
+  const latest = session.events.findLast(event => event.type === 'session/title')
+  return latest === undefined
+    || (latest.data.source.kind !== 'user' && latest.data.title === DEFAULT_TITLE)
+}
 
 /** Flatten result content blocks into model-facing text for the wire. */
 function flattenContent(content: readonly ContentBlock[]): string {
@@ -141,11 +173,6 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-/** Truncate a mirrored text field. */
-function cap(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max)}…` : text
-}
-
 /** Stable session identity for a conversation key; the raw key never leaves the process. */
 function sessionIdFor(conversationKey: string): SessionId {
   const digest = createHash('sha256').update(conversationKey).digest('hex')
@@ -153,30 +180,23 @@ function sessionIdFor(conversationKey: string): SessionId {
 }
 
 /**
- * Bound a client message history to the bounded sync projection. Only
- * role/name/flattened text survive; anything unrecognizable is skipped.
+ * Project client-delivered messages verbatim. The wire contract is the event
+ * projection itself — `{ role, name?, text }` per message, `text` a plain
+ * string (voice_edge.py taps its relay-extracted turn text there) — so this
+ * only drops messages that are not objects. No re-parse of client content
+ * shapes exists on this path by design.
  */
 function projectMessages(messages: unknown): VoiceEdgeMessageProjection[] {
   if (!Array.isArray(messages)) return []
   const projected: VoiceEdgeMessageProjection[] = []
-  for (const raw of messages.slice(-SYNC_MAX_MESSAGES)) {
+  for (const raw of messages) {
     if (typeof raw !== 'object' || raw === null) continue
     const message = raw as Record<string, unknown>
-    const role = asString(message['role']) || 'unknown'
-    const name = asString(message['name'])
-    const content = message['content']
-    let text = ''
-    if (typeof content === 'string') {
-      text = content
-    } else if (Array.isArray(content)) {
-      text = content
-        .map(part => (typeof part === 'object' && part !== null
-          ? asString((part as Record<string, unknown>)['text'])
-          : ''))
-        .filter(Boolean)
-        .join('\n')
-    }
-    projected.push({ role, ...name ? { name } : {}, text: cap(text, SYNC_MAX_MESSAGE_CHARS) })
+    projected.push({
+      role: asString(message['role']) || 'unknown',
+      ...asString(message['name']) ? { name: asString(message['name']) } : {},
+      text: asString(message['text']),
+    })
   }
   return projected
 }
@@ -191,6 +211,19 @@ export function apply(ctx: Context, config: Config): void {
   /** sessionId -> conversation, for the approval answerer. */
   const bySessionId = new Map<string, Conversation>()
   const expectedAuth = Buffer.from(`Bearer ${config.token}`)
+
+  // A durable delete (workspace.deleteSession) structurally disposes the agent
+  // through the registry; drop the bound conversation here so the next Python
+  // request rebinds or recreates instead of holding a stale agent reference.
+  ctx.on('session/disposed', (session: Session) => {
+    const convo = bySessionId.get(session.id)
+    if (convo === undefined) return
+    conversations.delete(convo.key)
+    bySessionId.delete(session.id)
+    for (const [alias, target] of aliases) {
+      if (target === convo.key) aliases.delete(alias)
+    }
+  })
 
   /** Constant-time bearer check; the token is the whole trust boundary. */
   function authorized(req: IncomingMessage): boolean {
@@ -256,26 +289,32 @@ export function apply(ctx: Context, config: Config): void {
   /**
    * Create the Harness agent for a canonical conversation key, or resume the
    * persisted session this conversation already owns. A restart empties the
-   * in-memory alias tables, so a later sync's lookup misses; probing the
+   * in-memory alias tables, so a later bind's lookup misses; probing the
    * durable store for the claimed key's session (a continuation) or the boot
    * key's (the turn-1 mirror) and resuming it keeps one conversation on one
-   * session. Creating a same-id fresh session instead would desynchronize the
-   * in-memory log from the durable one, and the persistence backend rejects
-   * the mismatched materialization at the next flush — losing the whole turn.
+   * session. A live agent on any candidate id (e.g. the Web client resumed
+   * the mirrored conversation through apiproxy) is re-attached as the
+   * binding — resuming under it would hit the persistence coordinator's
+   * live-session refusal. Creating a same-id fresh session instead would
+   * desynchronize the in-memory log from the durable one, and the persistence
+   * backend rejects the mismatched materialization at the next flush — losing
+   * the whole turn.
    */
   async function createConversation(key: string, bootKey: string, cwd: string | undefined): Promise<Conversation> {
     const sessionId = sessionIdFor(key)
-    const existing = ctx.agents.get(sessionId)
-    if (existing !== undefined) {
-      return { key, sessionId, agent: existing, sequence: 0, chain: Promise.resolve(), touched: Date.now() }
+    // Same first-user-line boot collision semantics as the in-memory alias:
+    // the boot candidate may adopt another conversation's session exactly
+    // where the pre-restart alias lookup would have merged them too.
+    const candidates = [sessionId, ...bootKey !== '' && bootKey !== key ? [sessionIdFor(bootKey)] : []]
+    for (const candidate of candidates) {
+      const existing = ctx.agents.get(candidate)
+      if (existing !== undefined) {
+        return { key, sessionId: candidate, agent: existing, sequence: 0, chain: Promise.resolve(), touched: Date.now() }
+      }
     }
     let resumeSessionId: SessionId | undefined
     const persistence = ctx.get('sessionPersistence')
     if (persistence !== undefined) {
-      // Same first-user-line boot collision semantics as the in-memory alias:
-      // the boot probe may adopt another conversation's session exactly where
-      // the pre-restart alias lookup would have merged them too.
-      const candidates = [sessionId, ...bootKey !== '' && bootKey !== key ? [sessionIdFor(bootKey)] : []]
       const headers = await persistence.list()
       resumeSessionId = candidates.find(id => headers.some(header => header.id === id))
     }
@@ -310,6 +349,17 @@ export function apply(ctx: Context, config: Config): void {
         'agent_unavailable',
       )
     }
+    // Every voice-edge session carries the placeholder title from creation —
+    // and adopted pre-title sessions gain it on resume — because the client's
+    // untitled display falls back to the cwd basename, which names the
+    // Harness checkout rather than this conversation surface.
+    if (!handle.agent.session.events.some(event => event.type === 'session/title')) {
+      handle.agent.session.append('session/title', {
+        title: DEFAULT_TITLE,
+        messageSeqs: [],
+        source: { kind: 'fallback' },
+      })
+    }
     return {
       key,
       sessionId: resumeSessionId ?? sessionId,
@@ -321,9 +371,9 @@ export function apply(ctx: Context, config: Config): void {
     }
   }
 
-  /** POST {base}/session/sync — bind a conversation, mirror the history, return tool schemas. */
-  async function onSync(body: Record<string, unknown>, res: ServerResponse): Promise<void> {
-    const request = body as unknown as VoiceEdgeSyncRequest
+  /** POST {base}/session/bind — bind a conversation and return tool schemas. Records nothing. */
+  async function onBind(body: Record<string, unknown>, res: ServerResponse): Promise<void> {
+    const request = body as unknown as VoiceEdgeBindRequest
     const bootKey = asString(request.boot_key)
     const fullKey = asString(request.full_key)
     const claimed = asString(request.conversation_key)
@@ -338,16 +388,6 @@ export function apply(ctx: Context, config: Config): void {
       aliases.set(alias, convo.key)
     }
     await evict()
-    convo.sequence += 1
-    const messages = Array.isArray(request.messages) ? request.messages : []
-    convo.agent.session.append('voice-edge/sync', {
-      requestId: asString(request.request_id),
-      model: asString(request.model),
-      messageCount: messages.length,
-      messages: projectMessages(messages),
-      ...bootKey ? { bootKey } : {},
-      ...fullKey ? { fullKey } : {},
-    })
     const tools: ToolSchema[] = ctx.tools.schemas(convo.agent)
     send(res, 200, {
       conversation_key: convo.key,
@@ -364,42 +404,114 @@ export function apply(ctx: Context, config: Config): void {
     if (!key) throw new HttpError(400, 'conversation_key is required', 'missing_key')
     const convo = lookup([key])
     if (convo === undefined) {
-      throw new HttpError(409, `unknown conversation_key ${JSON.stringify(key)} — call session/sync first`, 'unknown_conversation')
+      throw new HttpError(409, `unknown conversation_key ${JSON.stringify(key)} — call session/bind first`, 'unknown_conversation')
     }
     convo.touched = Date.now()
     return convo
   }
 
-  /** POST {base}/model/event — mirror one external model step. */
-  function onModelEvent(body: Record<string, unknown>, res: ServerResponse): void {
-    const request = body as unknown as VoiceEdgeModelEventRequest
+  /** POST {base}/event — append one client-delivered mirror event. */
+  async function onEvent(body: Record<string, unknown>, res: ServerResponse): Promise<void> {
+    const request = body as unknown as VoiceEdgeEventRequest
     const convo = requireConversation(body)
-    const sequence = typeof request.sequence === 'number' ? request.sequence : ++convo.sequence
-    convo.sequence = Math.max(convo.sequence, sequence)
-    const toolCalls = Array.isArray(request.tool_calls)
-      ? (request.tool_calls as unknown[])
-        .filter(call => typeof call === 'object' && call !== null)
-        .map((call) => {
-          const raw = call as Record<string, unknown>
-          const rawArguments = raw['arguments']
-          return {
-            id: asString(raw['id']),
-            name: asString(raw['name']),
-            arguments: typeof rawArguments === 'string' ? rawArguments : JSON.stringify(rawArguments ?? ''),
-          }
+    switch (asString(request.type)) {
+      case 'voice-edge/sync': {
+        convo.sequence += 1
+        const messages = Array.isArray(request.messages) ? request.messages : []
+        const projected = projectMessages(messages)
+        const userText = projected.find(message => message.role === 'user')?.text ?? ''
+        if (generatedTitleApplies(convo.agent.session) && isTitleGenerationPrompt(userText)) {
+          // A generate-title turn mirrors nothing: the instruction and the
+          // model's title reply are not conversation content. Sessions with a
+          // standing title skip detection entirely — the turn mirrors as
+          // ordinary content.
+          convo.titleTurn = { text: '' }
+          break
+        }
+        // An ordinary turn supersedes any title turn that never finished.
+        convo.titleTurn = undefined
+        const bootKey = asString(request.boot_key)
+        const fullKey = asString(request.full_key)
+        convo.agent.session.append('voice-edge/sync', {
+          requestId: asString(request.request_id),
+          model: asString(request.model),
+          messageCount: messages.length,
+          messages: projected,
+          ...bootKey ? { bootKey } : {},
+          ...fullKey ? { fullKey } : {},
         })
-      : undefined
-    const text = asString(request.text)
-    const reasoning = asString(request.reasoning)
-    const finishReason = asString(request.finish_reason)
-    convo.agent.session.append('voice-edge/model-event', {
-      sequence,
-      kind: asString(request.kind) || 'step',
-      ...text ? { text: cap(text, EVENT_MAX_TEXT_CHARS) } : {},
-      ...reasoning ? { reasoning: cap(reasoning, EVENT_MAX_TEXT_CHARS) } : {},
-      ...toolCalls?.length ? { toolCalls } : {},
-      ...finishReason ? { finishReason } : {},
-    })
+        break
+      }
+      case 'voice-edge/model-event': {
+        const sequence = typeof request.sequence === 'number' ? request.sequence : ++convo.sequence
+        convo.sequence = Math.max(convo.sequence, sequence)
+        const text = asString(request.text)
+        if (convo.titleTurn !== undefined) {
+          // The title reply itself: withheld with the turn; the last non-empty
+          // step text is what finish folds into session/title.
+          if (text !== '') convo.titleTurn = { text }
+          break
+        }
+        const reasoning = asString(request.reasoning)
+        const toolCalls = Array.isArray(request.tool_calls)
+          ? (request.tool_calls as unknown[])
+            .filter(call => typeof call === 'object' && call !== null)
+            .map((call) => {
+              const raw = call as Record<string, unknown>
+              const rawArguments = raw['arguments']
+              return {
+                id: asString(raw['id']),
+                name: asString(raw['name']),
+                arguments: typeof rawArguments === 'string' ? rawArguments : JSON.stringify(rawArguments ?? ''),
+              }
+            })
+          : undefined
+        const finishReason = asString(request.finish_reason)
+        convo.agent.session.append('voice-edge/model-event', {
+          sequence,
+          kind: asString(request.kind) || 'step',
+          ...text ? { text } : {},
+          ...reasoning ? { reasoning } : {},
+          ...toolCalls?.length ? { toolCalls } : {},
+          ...finishReason ? { finishReason } : {},
+        })
+        break
+      }
+      case 'voice-edge/finish': {
+        const sequence = typeof request.sequence === 'number' ? request.sequence : ++convo.sequence
+        convo.sequence = Math.max(convo.sequence, sequence)
+        const titleTurn = convo.titleTurn
+        convo.titleTurn = undefined
+        if (titleTurn !== undefined) {
+          const title = normalizeSessionTitle(titleTurn.text, TITLE_MAX_BYTES)
+          if (title !== '' && generatedTitleApplies(convo.agent.session)) {
+            convo.agent.session.append('session/title', {
+              title,
+              messageSeqs: [],
+              source: { kind: 'provider', provider: SessionTitleProviderId('voice-edge') },
+            })
+          }
+        }
+        convo.agent.session.append('voice-edge/finish', {
+          sequence,
+          status: asString(request.status) || 'completed',
+        })
+        await convo.chain
+        // flush reports whether a durability listener participated — an assembly
+        // without persistence still finished the turn, so it is its own field.
+        const flushed = await ctx.sessions.flush(convo.agent.session)
+        send(res, 200, {
+          conversation_key: convo.key,
+          harness_session_id: convo.sessionId,
+          synced: true,
+          sequence: convo.sequence,
+          flushed,
+        } satisfies VoiceEdgeAck & { flushed: boolean })
+        return
+      }
+      default:
+        throw new HttpError(400, `unsupported event type ${JSON.stringify(asString(request.type))}`, 'unsupported_event')
+    }
     send(res, 200, {
       conversation_key: convo.key,
       harness_session_id: convo.sessionId,
@@ -431,7 +543,7 @@ export function apply(ctx: Context, config: Config): void {
       callId,
       name: toolName,
       isError: result.isError,
-      text: cap(text, EVENT_MAX_TEXT_CHARS),
+      text,
       durationMs: Date.now() - started,
     })
     return { isError: result.isError, text }
@@ -456,30 +568,7 @@ export function apply(ctx: Context, config: Config): void {
     } satisfies VoiceEdgeAck & { tool_result: VoiceEdgeToolResult })
   }
 
-  /** POST {base}/turn/finish — close the turn and checkpoint durability. */
-  async function onTurnFinish(body: Record<string, unknown>, res: ServerResponse): Promise<void> {
-    const convo = requireConversation(body)
-    const request = body as unknown as VoiceEdgeTurnFinishRequest
-    const sequence = typeof request.sequence === 'number' ? request.sequence : ++convo.sequence
-    convo.sequence = Math.max(convo.sequence, sequence)
-    convo.agent.session.append('voice-edge/finish', {
-      sequence,
-      status: asString(request.status) || 'completed',
-    })
-    await convo.chain
-    // flush reports whether a durability listener participated — an assembly
-    // without persistence still finished the turn, so it is its own field.
-    const flushed = await ctx.sessions.flush(convo.agent.session)
-    send(res, 200, {
-      conversation_key: convo.key,
-      harness_session_id: convo.sessionId,
-      synced: true,
-      sequence: convo.sequence,
-      flushed,
-    } satisfies VoiceEdgeAck & { flushed: boolean })
-  }
-
-  /** Single prefix handler dispatching the four endpoints plus a health seat. */
+  /** Single prefix handler dispatching the three endpoints plus a health seat. */
   async function handler(req: IncomingMessage, res: ServerResponse): Promise<void> {
     try {
       if (!authorized(req)) throw new HttpError(401, 'invalid or missing bearer token', 'unauthorized')
@@ -491,17 +580,14 @@ export function apply(ctx: Context, config: Config): void {
       if (req.method !== 'POST') throw new HttpError(405, 'POST only', 'method_not_allowed')
       const body = await readJson(req)
       switch (sub) {
-        case '/session/sync':
-          await onSync(body, res)
+        case '/session/bind':
+          await onBind(body, res)
           return
-        case '/model/event':
-          onModelEvent(body, res)
+        case '/event':
+          await onEvent(body, res)
           return
         case '/tool/execute':
           await onToolExecute(body, res)
-          return
-        case '/turn/finish':
-          await onTurnFinish(body, res)
           return
         default: throw new HttpError(404, `unknown voice-edge endpoint ${JSON.stringify(sub)}`, 'not_found')
       }

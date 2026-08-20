@@ -12,7 +12,7 @@ Two host paths computed the bit — `sessionBlank()` for the `host/session-added
 
 ## Decision
 
-One shared predicate, `CONVERSATION_START_EVENTS`, names both markers: `turn/start` (a Harness model-loop turn) and `voice-edge/sync` (the first event of every mirrored turn — `/session/sync` is the mandatory entry point every other endpoint 409s without, so a bound mirror always has one). Both blankness paths and the preset lock read it. `dsh-host-apiproxy` takes a type-only dependency on `@deepseek-ai/dsh-voice-edge/types` for the `SessionEventMap` merge, following the package's existing side-effect type imports.
+One shared predicate, `CONVERSATION_START_EVENTS`, names both markers: `turn/start` (a Harness model-loop turn) and `voice-edge/sync` (the user-turn event the client delivers once per mirrored turn — `/session/bind` is the mandatory entry point every other endpoint 409s without, and the client delivers the sync event on every turn). Both blankness paths and the preset lock read it. `dsh-host-apiproxy` takes a type-only dependency on `@deepseek-ai/dsh-voice-edge/types` for the `SessionEventMap` merge, following the package's existing side-effect type imports.
 
 ## Alternatives considered
 

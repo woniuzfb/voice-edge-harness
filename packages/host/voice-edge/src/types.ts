@@ -11,8 +11,10 @@ import type { JsonValue } from '@deepseek-ai/dsh-session'
 declare module '@deepseek-ai/dsh-session/types' {
   interface SessionEventMap {
     /**
-     * One voice_edge.py turn was bound to this Harness session. `messages` is
-     * a bounded role/text projection of the client history at sync time — a
+     * One user turn delivered by voice_edge.py after `/session/bind`.
+     * `messages` carries the user's fresh turn text — the relay-extracted
+     * body of the prompt submitted to the external model, without per-turn
+     * transport framing (relayed system prose, tool-instruction XML) — a
      * diagnostic mirror, never a model-context source. `bootKey`/`fullKey`
      * are the voice-edge identity hashes aliased to this session.
      */
@@ -77,28 +79,41 @@ export interface VoiceEdgeToolCallMirror {
   arguments: string
 }
 
-/** POST {path}/session/sync request body. */
-export interface VoiceEdgeSyncRequest {
+/** POST {path}/session/bind request body. */
+export interface VoiceEdgeBindRequest {
   conversation_key?: string
   boot_key?: string
   full_key?: string
-  request_id?: string
   model?: string
   /** Working directory for a newly created Harness agent. */
   cwd?: string
-  /** Client message history; mirrored bounded, never returned. */
-  messages?: unknown[]
 }
 
-/** POST {path}/model/event request body. */
-export interface VoiceEdgeModelEventRequest {
+/**
+ * POST {path}/event request body: one mirror event voice_edge.py explicitly
+ * delivers. `type` picks the branch; the fields below it are that event's
+ * payload. `voice-edge/tool-call`/`voice-edge/tool-result` are absent — the
+ * plugin records those itself inside `/tool/execute`.
+ */
+export interface VoiceEdgeEventRequest {
   conversation_key: string
+  type: 'voice-edge/sync' | 'voice-edge/model-event' | 'voice-edge/finish'
+  /** `voice-edge/sync`: the user turn. */
+  request_id?: string
+  model?: string
+  /** Single-message array carrying the exact prompt submitted to the model. */
+  messages?: unknown[]
+  boot_key?: string
+  full_key?: string
+  /** `voice-edge/model-event`: one external model step. */
   sequence?: number
   kind?: string
   text?: string
   reasoning?: string
   tool_calls?: VoiceEdgeToolCallMirror[]
   finish_reason?: string
+  /** `voice-edge/finish`: turn close; also triggers the durability flush. */
+  status?: string
 }
 
 /** POST {path}/tool/execute request body. */
@@ -107,13 +122,6 @@ export interface VoiceEdgeToolExecuteRequest {
   call_id: string
   name: string
   arguments?: JsonValue
-}
-
-/** POST {path}/turn/finish request body. */
-export interface VoiceEdgeTurnFinishRequest {
-  conversation_key: string
-  sequence?: number
-  status?: string
 }
 
 /** The tool result projection returned to voice_edge.py. */

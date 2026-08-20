@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-voice-edge-restart-resumes-mirrored-session.md
-2026-08-19-voice-edge-restart-resumes-mirrored-session.md: 0814e1070310ac661bd79d82b12c23956f09aae6
-2026-08-19-voice-edge-restart-resumes-mirrored-session.zh.md: e6a18567e6eeee4e32d4c188479fdbfe06f59e1f
+2026-08-19-voice-edge-restart-resumes-mirrored-session.md: a9bcea8eec56bd14ba6b02e1e0bc23157d309c1d
+2026-08-19-voice-edge-restart-resumes-mirrored-session.zh.md: 9ef00833972da7682c53bb8b5cced8518b6a4632
