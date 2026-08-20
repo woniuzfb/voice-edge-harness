@@ -4,12 +4,13 @@
  * cache frozen blocks as React elements; the rendered DOM is pinned
  * byte-for-byte by `tests/fixtures/markdown-dom` and must not drift.
  *
- * Untrusted-output policy (unchanged from the replaced pipeline): link and
- * image destinations pass a protocol allowlist, images additionally require
- * absolute HTTP(S), raw HTML renders as literal text (no HTML enters the
- * DOM), and KaTeX runs without trusted commands. Fragment-anchor URLs fail
- * the allowlist, so footnote references and back-references render as plain
- * text rather than in-page links.
+ * Untrusted-output policy (unchanged from the replaced pipeline except the
+ * image gate below): link destinations pass a protocol allowlist, images
+ * require absolute HTTP(S) or a well-formed inline `data:image/*;base64`
+ * raster (SVG excluded — script-capable document), raw HTML renders as
+ * literal text (no HTML enters the DOM), and KaTeX runs without trusted
+ * commands. Fragment-anchor URLs fail the allowlist, so footnote references
+ * and back-references render as plain text rather than in-page links.
  *
  * Merge-extensible node unions fall through the documented default (render
  * nothing) rather than ending in assertNever: grammars registered elsewhere
@@ -51,7 +52,29 @@ function sanitizeUrl(url: string): string {
   }
 }
 
-function remoteImageUrl(url: string): string | undefined {
+/**
+ * The image source gate: absolute HTTP(S), or an inline base64 payload the
+ * mirror streams (`data:image/…;base64,`). Base64 rasters only — SVG is a
+ * script-capable document and stays out — and the payload must be well-formed
+ * base64, so a stream cut mid-image falls back to the alt text instead of a
+ * broken image. A cut that lands on a base64 group boundary still passes and
+ * renders partially; that residue is not detectable from the URL alone.
+ *
+ * @param url - Candidate image source, already normalized by the caller.
+ * @returns The same URL when it is a well-formed inline raster data URI, else undefined.
+ */
+export function dataImageSrc(url: string): string | undefined {
+  const match = /^data:image\/(?:png|jpe?g|gif|webp|bmp|avif);base64,([A-Za-z0-9+/]+={0,2})$/.exec(url)
+  if (match === null) return undefined
+  const payload = match[1] ?? ''
+  // Exact base64 grammar: whole groups, then optional one/two-char padding.
+  if (payload === '' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(payload)) return undefined
+  return url
+}
+
+function imageUrl(url: string): string | undefined {
+  const inline = dataImageSrc(url)
+  if (inline !== undefined) return inline
   try {
     const protocol = new URL(url).protocol
     return protocol === 'http:' || protocol === 'https:' ? url : undefined
@@ -469,7 +492,9 @@ function inlineCodeHttpUrl(value: string): string | undefined {
 }
 
 function renderImage(url: string, alt: string, key: Key): ReactNode {
-  const imageSrc = remoteImageUrl(sanitizeUrl(normalizeUri(url)))
+  // Images bypass the link allowlist (`sanitizeUrl`) for their own gate:
+  // inline data:image payloads are not navigable URLs but are safe img srcs.
+  const imageSrc = imageUrl(normalizeUri(url))
   if (imageSrc === undefined) {
     return <span key={key} className={css.imageAlt}>{alt}</span>
   }

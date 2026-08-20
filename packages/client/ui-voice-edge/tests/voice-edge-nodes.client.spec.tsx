@@ -20,7 +20,7 @@ import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-conversation/src/
 import {
   voiceEdgeAssistantDefinition, voiceEdgeToolDefinition, voiceEdgeUserDefinition,
 } from '../src/client/definitions.ts'
-import { VoiceEdgeToolView } from '../src/client/VoiceEdgeNodes.tsx'
+import { VoiceEdgeAssistantView, VoiceEdgeToolView, VoiceEdgeUserView } from '../src/client/VoiceEdgeNodes.tsx'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -160,6 +160,78 @@ describe('voice-edge mirror conversation nodes', () => {
       resultText: 'denied',
       durationMs: 3,
     })
+  })
+
+  it('renders the mirrored user bubble as literal text with its re-embedded inline image', () => {
+    const image = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA'
+    const t = makeTranslate(zh, commonZh)
+    const props = {
+      node: {
+        key: 'voice-edge-user:sync-3',
+        data: {
+          seq: 3,
+          time: 1,
+          model: 'LLM:m365-x',
+          text: `# 不是标题\n**加粗**也保留\n\n看这张图\n\n![image-1.png](${image})`,
+        },
+      },
+      t,
+    } as unknown as Parameters<typeof VoiceEdgeUserView>[0]
+    const { container } = render(<VoiceEdgeUserView {...props} />)
+
+    // The user's markdown syntax renders as typed — no heading, no bold.
+    expect(container.querySelector('h1, strong')).toBeNull()
+    expect(container.textContent).toContain('# 不是标题')
+    expect(container.textContent).toContain('**加粗**也保留')
+    // The mirror's re-embedded image still displays.
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(image)
+    expect(container.querySelector('img')?.getAttribute('alt')).toBe('image-1.png')
+    // The row is a navigation anchor and carries the action row: user-message
+    // hops plus copy, all outside the bubble.
+    expect(container.querySelector('[data-voice-edge-user]')).not.toBeNull()
+    expect(container.querySelector(`button[aria-label="${zh['nav.prevUser']}"]`)).not.toBeNull()
+    expect(container.querySelector(`button[aria-label="${zh['nav.nextUser']}"]`)).not.toBeNull()
+    expect(container.querySelector(`button[aria-label="${zh['copy']}"]`)).not.toBeNull()
+  })
+
+  it('renders a truncated mirror image as its alt text without leaking the payload', () => {
+    const truncated = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgA'
+    const t = makeTranslate(zh, commonZh)
+    const props = {
+      node: {
+        key: 'voice-edge-user:sync-3',
+        data: { seq: 3, time: 1, model: 'LLM:m365-x', text: `![被截断的图](${truncated})` },
+      },
+      t,
+    } as unknown as Parameters<typeof VoiceEdgeUserView>[0]
+    const { container } = render(<VoiceEdgeUserView {...props} />)
+
+    expect(container.querySelector('img')).toBeNull()
+    expect(container.textContent).not.toContain('iVBORw0KGgoAAAANSUhEUgA')
+    expect(container.textContent).toContain('被截断的图')
+  })
+
+  it('renders a mirrored assistant step as Markdown: complete inline images display, truncated ones fall back to alt', () => {
+    const complete = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA'
+    const truncated = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgA'
+    const text = `![生成的图片](${complete})\n\nand a cut one: ![被截断的图](${truncated})`
+    const t = makeTranslate(zh, commonZh)
+    const props = {
+      node: {
+        key: 'voice-edge-assistant:model-event-4',
+        data: { seq: 4, time: 1, text, reasoning: '', finishReason: 'stop' },
+      },
+      t,
+    } as unknown as Parameters<typeof VoiceEdgeAssistantView>[0]
+    const { container } = render(<VoiceEdgeAssistantView {...props} />)
+
+    const images = [...container.querySelectorAll('img')]
+    expect(images.map(image => image.getAttribute('src'))).toEqual([complete])
+    // The truncated payload neither renders nor leaks its base64 into text.
+    expect(container.textContent).not.toContain('iVBORw0KGgoAAAANSUhEUgAA')
+    expect(container.textContent).toContain('被截断的图')
+    // The step text carries the corner copy action.
+    expect(container.querySelector(`button[aria-label="${zh['copy']}"]`)).not.toBeNull()
   })
 
   it('renders a failed tool row with the error text', () => {

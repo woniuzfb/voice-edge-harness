@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-voice-edge/README.md
-README.md: e46e65b51b9773e898f229c2b348b596ac0cbee1
-README.zh.md: d8a1ef107317571748c360f1eb25c7e2ea63e10b
+README.md: f29869e585694e4a2d6ddcf1b3c109de2a7e2345
+README.zh.md: 8d5eb68d0425382292d22aead2fc14fb153b276a

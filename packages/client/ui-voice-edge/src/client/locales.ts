@@ -9,6 +9,10 @@ export const zh = {
   'tool.running': '执行中',
   'tool.succeeded': '完成',
   'tool.failed': '失败',
+  'copy': '复制',
+  'copied': '已复制',
+  'nav.prevUser': '上一条用户消息',
+  'nav.nextUser': '下一条用户消息',
 } satisfies Record<string, string>
 
 /** The voiceEdge namespace key union. */
@@ -23,4 +27,8 @@ export const en = {
   'tool.running': 'Running',
   'tool.succeeded': 'Completed',
   'tool.failed': 'Failed',
+  'copy': 'Copy',
+  'copied': 'Copied',
+  'nav.prevUser': 'Previous user message',
+  'nav.nextUser': 'Next user message',
 } satisfies Record<VoiceEdgeKey, string>

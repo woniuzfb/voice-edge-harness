@@ -285,6 +285,31 @@ describe('MarkdownText', () => {
     expect(screen.getByText('mail diagram')).toBeTruthy()
   })
 
+  it('renders well-formed inline data:raster images and rejects malformed or non-raster ones', () => {
+    const markdown = [
+      '![generated chart](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA)',
+      '![cut mid-stream](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgA)',
+      '![svg payload](data:image/svg+xml;base64,iVBORw0KGgo)',
+      '![not an image](data:text/plain;base64,aGVsbG8=)',
+      '![empty payload](data:image/png;base64,)',
+      '![data link not image][data-ref]',
+      '',
+      '[data-ref]: data:image/png;base64,iVBORw0KGg',
+    ].join('\n\n')
+    const { container } = render(<MarkdownText text={markdown} />)
+
+    const images = [...container.querySelectorAll('img')]
+    expect(images.map(image => image.getAttribute('src'))).toEqual([
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA',
+    ])
+    // Rejected destinations fall back to their alt text; the base64 wall and
+    // the URL never enter the DOM.
+    for (const alt of ['cut mid-stream', 'svg payload', 'not an image', 'empty payload', 'data link not image']) {
+      expect(screen.getByText(alt)).toBeTruthy()
+    }
+    expect(container.textContent).not.toContain('aGVsbG8')
+  })
+
   it('keeps incomplete streaming Markdown renderable', () => {
     const { container } = render(<MarkdownText text={'## Streaming\n\n- first\n- **unfinished'} />)
     expect(screen.getByRole('heading', { level: 2, name: 'Streaming' })).toBeTruthy()

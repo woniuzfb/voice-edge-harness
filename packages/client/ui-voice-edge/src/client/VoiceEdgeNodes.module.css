@@ -3,6 +3,10 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
+  /* Turn separation: ChatView's column gap (16px) applies to every row; the
+     extra top margin rides each turn's opening user row so a new turn reads
+     as a break, not just another row. */
+  margin-top: 20px;
 }
 
 .userStack {
@@ -20,8 +24,22 @@
   border-radius: 22px;
   background: var(--dsw-specific-bubble);
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-markdown-code);
-  white-space: pre-wrap;
+}
+
+/* Mirrored user text renders literal through MessageText, whose own .text
+   carries pre-wrap; the mirror's re-embedded inline images stack as blocks. */
+.userImage {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin: 0;
+  border-radius: 8px;
+}
+
+.userImageAlt {
+  color: var(--dsw-alias-label-tertiary);
+  font-style: italic;
 }
 
 .assistantRow {
@@ -33,12 +51,52 @@
   max-width: min(680px, 100%);
 }
 
+/* Assistant step text renders through MarkdownText with CommonMark line
+   semantics (soft breaks collapse, blocks carry their own margins) — same as
+   the main conversation's AssistantMarkdown, which sets no white-space. */
 .assistantText {
   overflow-wrap: anywhere;
   color: var(--dsw-alias-label-primary);
   font-size: 16px;
   line-height: 28px;
-  white-space: pre-wrap;
+}
+
+/* Action rows outside the bubble block, always visible. User rows sit under
+   the right-aligned bubble: copy left of the user-message hops. Assistant
+   rows sit at the reply's bottom-left. */
+.bubbleActions,
+.bubbleActionsAssistant {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.bubbleActions {
+  justify-content: flex-end;
+}
+
+.bubbleActionsAssistant {
+  justify-content: flex-start;
+}
+
+.actionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 5px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.actionButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-secondary);
 }
 
 .reasoning {
