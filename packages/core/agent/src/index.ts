@@ -255,6 +255,8 @@ interface FactorySlot {
  */
 export class AgentRegistry extends Service {
   private store = new Map<SessionId, AgentEntry>()
+  /** Handles minted by {@link create}/{@link resume}, kept for structural {@link dispose}. */
+  private readonly handles = new Map<SessionId, AgentHandle>()
   private factory: FactorySlot | undefined
   private readonly initiators = new AsyncLocalStorage<Agent | undefined>()
   private readonly initiatorRuns = new AsyncLocalStorage<InitiatorRun>()
@@ -411,7 +413,9 @@ export class AgentRegistry extends Service {
     const { target } = this.requireFactory()
     const receiver = getTraceable(ownerCtx, target)
     // oxlint-disable-next-line typescript/unbound-method -- Reflect.apply intentionally supplies the caller-traced receiver
-    return Reflect.apply(target.createAgent, receiver, [ownerCtx, options])
+    const handle = await Reflect.apply(target.createAgent, receiver, [ownerCtx, options])
+    this.handles.set(handle.agent.id, handle)
+    return handle
   }
 
   /**
@@ -426,7 +430,31 @@ export class AgentRegistry extends Service {
     const { target } = this.requireFactory()
     const receiver = getTraceable(ownerCtx, target)
     // oxlint-disable-next-line typescript/unbound-method -- Reflect.apply intentionally supplies the caller-traced receiver
-    return Reflect.apply(target.resume, receiver, [ownerCtx, options])
+    const handle = await Reflect.apply(target.resume, receiver, [ownerCtx, options])
+    this.handles.set(handle.agent.id, handle)
+    return handle
+  }
+
+  /**
+   * Structurally tear down one live agent by session id. The registry is the
+   * factory provider's host, so it holds the same structural teardown right
+   * the {@link AgentHandle} contract grants the provider ("provider unload
+   * stops and drains every live handle it made"); this method exposes that
+   * right for product-level operations (durable session delete) that must
+   * remove an agent regardless of which consumer minted it. The consumer-side
+   * capability is unchanged: normal lifecycles still run through the handles
+   * their owners keep.
+   * @param id - the session id of the live agent to dispose.
+   * @returns whether a registered handle was found and disposed; `false` for
+   *   an unknown or already-disposed id (an agent entered through
+   *   {@link register} without a factory minted handle is not reachable here).
+   */
+  async dispose(id: SessionId): Promise<boolean> {
+    const handle = this.handles.get(id)
+    if (handle === undefined) return false
+    this.handles.delete(id)
+    await handle.dispose()
+    return true
   }
 
   /**

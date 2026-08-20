@@ -367,6 +367,17 @@ abstract readFrom(id: SessionId, fromSeq: number, signal?: AbortSignal): Promise
 abstract list(signal?: AbortSignal): Promise<SessionHeader[]>
 
 /**
+ * Durably delete one session's stored log and every session-local artifact.
+ * This is the only non-append-only persistence operation; it exists because
+ * the user owns the on-disk record and may retract it. A session bound to a
+ * live Session through this backend rejects; an id with no stored artifact
+ * resolves without writing (delete is idempotent at the durability
+ * boundary).
+ * @param id - the persisted session to delete.
+ */
+abstract delete(id: SessionId): Promise<void>
+
+/**
  * List materialized sessions with cheap per-log change tokens.
  *
  * Repeated observations of an unchanged log return the same revision. A

@@ -52,6 +52,17 @@ export class WorkspaceUnknownSessionError extends Error {
   }
 }
 
+/** A deleteSession request named a session that is currently live. */
+export class WorkspaceLiveSessionError extends Error {
+  /**
+   * @param sessionId - The live session id.
+   */
+  constructor(readonly sessionId: SessionId) {
+    super(`cannot delete session '${sessionId}': it is live; dispose it first`)
+    this.name = 'WorkspaceLiveSessionError'
+  }
+}
+
 /** A workspace reorder named a source or anchor absent from the durable registry order. */
 export class WorkspaceOrderInvalidError extends Error {
   /**
@@ -67,6 +78,17 @@ export class WorkspaceOrderInvalidError extends Error {
 declare module '@deepseek-ai/cordis' {
   interface Context {
     workspaceRegistry: WorkspaceRegistry
+  }
+
+  interface Events {
+    /**
+     * One session's durable log and every registry reference were deleted.
+     * Fires after the durable deletion committed; listener failures are logged
+     * and contained.
+     * @param sessionId - the deleted session id.
+     * @mode emit
+     */
+    'workspace/session-deleted'(sessionId: SessionId): void
   }
 }
 
@@ -251,6 +273,41 @@ export class WorkspaceRegistry extends Service {
       }
       const state = this.requireState()
       await this.setState({ ...state, archivedSessionIds: [...state.archivedSessionIds, sessionId] })
+    })
+  }
+
+  /**
+   * Delete one session's durable log and every registry reference to it.
+   * Live sessions reject; an unknown id still clears any stale registry
+   * references and resolves (delete is idempotent at the registry boundary).
+   * The durable log is deleted first, so a mid-way failure leaves the log
+   * recoverable through persistence rather than losing it while the registry
+   * still lists it.
+   * @param sessionId - The session to delete.
+   * @returns resolution after durability.
+   */
+  deleteSession(sessionId: SessionId): Promise<void> {
+    return this.enqueueOperation(async () => {
+      if (this.ctx.get('sessions')?.get(sessionId) !== undefined) {
+        throw new WorkspaceLiveSessionError(sessionId)
+      }
+      if (await this.sessionKnown(sessionId)) {
+        await this.ctx.sessionPersistence.delete(sessionId)
+      }
+      this.headers.delete(sessionId)
+      this.sessionPaths.delete(sessionId)
+      this.invalidSessionPaths.delete(sessionId)
+      for (const entity of this.entities.values()) {
+        await entity.detachSession(sessionId)
+      }
+      const state = this.requireState()
+      if (state.archivedSessionIds.includes(sessionId)) {
+        await this.setState({
+          ...state,
+          archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
+        })
+      }
+      this.ctx.emit('workspace/session-deleted', sessionId)
     })
   }
 

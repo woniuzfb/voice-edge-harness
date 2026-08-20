@@ -5,6 +5,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentFactory } from '@deepseek-ai/dsh-agent'
+import AgentLoop from '@deepseek-ai/dsh-agent-loop'
+import LlmRuntime, { createUserMessage, LlmAdapter } from '@deepseek-ai/dsh-llm'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -75,21 +79,30 @@ async function harness(
   const storageDomain = new DomainFacility(ctx, { backend: 'memory', routes: {} })
   ctx.storage.mount('domain', storageDomain)
   ctx.provide('storageDomain', storageDomain)
-  ctx.provide('sessionPersistence', { list: () => Promise.resolve([]) } as never)
+  ctx.provide('sessionPersistence', {
+    list: () => Promise.resolve([]),
+    delete: () => Promise.resolve(),
+  } as never)
   await ctx.plugin(WorkspaceRegistry)
 
   const factory: AgentFactory = {
     async createAgent(_ownerCtx, options) {
-      const session = ctx.sessions.create(
+      const session = ctx.sessions.prepare(
         options.sessionId,
         options.meta === undefined ? {} : { meta: options.meta },
       )
+      const detachSession = ctx.sessions.enter(session)
+      ctx.sessions.announce(session)
       const agent = stubAgent(session)
       const unregister = ctx.agents.register(agent)
       return {
         agent,
+        // Mirror the real handle contract: disposal removes the agent AND its
+        // session from the store, so a following durable delete passes the
+        // registry's live check.
         dispose: () => {
           unregister()
+          detachSession()
           return Promise.resolve()
         },
       }
@@ -116,6 +129,39 @@ function stageDir(root: string, name: string): string {
   const path = join(root, name)
   mkdirSync(path)
   return path
+}
+
+/**
+ * Same composition as {@link harness} but with the real AgentLoop factory
+ * instead of the stub: a delete must tear down a real machine (cancel,
+ * whenIdle, scope dispose) the way the composed product does.
+ */
+async function realLoopHarness() {
+  const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-apiproxy-realloop-')))
+  const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(AgentRegistry)
+  await ctx.plugin(UserQuestionService)
+  await ctx.plugin(LlmRuntime)
+  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(AgentLoop, { agents: [] })
+  await ctx.plugin(Storage)
+  ctx.storage.backend.register('memory', new MemoryStorageBackend())
+  const storageDomain = new DomainFacility(ctx, { backend: 'memory', routes: {} })
+  ctx.storage.mount('domain', storageDomain)
+  ctx.provide('storageDomain', storageDomain)
+  ctx.provide('sessionPersistence', {
+    list: () => Promise.resolve([]),
+    delete: () => Promise.resolve(),
+  } as never)
+  await ctx.plugin(WorkspaceRegistry)
+  ctx.provide('directoryPicker', { capability: () => ({ kind: 'native', pick: async () => null }) } as never)
+  const api = createApiProxy(ctx, {
+    defaultModelSelection: () => ({ provider: 'mock', model: 'mock-model' }),
+    cwd: root,
+  })
+  return { api, ctx, storageDomain, root }
 }
 
 describe('host.pickDirectory', () => {
@@ -567,4 +613,118 @@ describe('Host Workspace increments', () => {
     })
     abort.abort()
   })
+})
+
+describe('workspace.deleteSession', () => {
+  it('disposes a live session the proxy owns, then deletes it durably', async () => {
+    const { api, ctx, root } = await harness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'delete-home') }))).workspace
+    const sessionId = SessionId('session-owned-live-delete')
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
+    expect(ctx.sessions.get(sessionId)).toBeDefined()
+    expect(ctx.agents.get(sessionId)).toBeDefined()
+
+    const abort = new AbortController()
+    const stream: AsyncIterator<RpcRequest<HostFrame>> =
+      api.events.host(request({}), abort.signal)[Symbol.asyncIterator]()
+    const removal = nextHostFrame(stream)
+    const deleted = await api.workspace.deleteSession(request({ sessionId }))
+    expect(expectOk(deleted).deleted).toBe(true)
+    // The disposable handle ran: both the session and its agent are gone, and
+    // the removal reached subscribers like a live-session disposal.
+    expect(ctx.sessions.get(sessionId)).toBeUndefined()
+    expect(ctx.agents.get(sessionId)).toBeUndefined()
+    expect(await removal).toMatchObject({
+      payload: { type: 'host/session-removed', sessionId },
+    })
+    expect(expectOk(await api.workspace.list(request({}))).items[0]?.sessionIds).toEqual([])
+    abort.abort()
+  })
+
+  it('deletes a live session minted outside the gateway (voice-edge style) through the registry dispose', async () => {
+    const { api, ctx, root } = await harness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'delete-bridge') }))).workspace
+    const sessionId = SessionId('session-voice-edge-live')
+    // Foreign creation path — mirrors the voice-edge bridge minting its agent
+    // directly through the registry, never passing through ensureSession.
+    await ctx.agents.create({ sessionId, meta: { cwd: workspace.path } })
+    expect(ctx.agents.get(sessionId)).toBeDefined()
+
+    expectOk(await api.workspace.deleteSession(request({ sessionId })))
+    expect(ctx.sessions.get(sessionId)).toBeUndefined()
+    expect(ctx.agents.get(sessionId)).toBeUndefined()
+    expect(expectOk(await api.workspace.list(request({}))).items[0]?.sessionIds).toEqual([])
+  })
+
+  it('rejects session-live for a live session with no disposable agent handle', async () => {
+    const { api, ctx, root } = await harness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'delete-foreign') }))).workspace
+    const sessionId = SessionId('session-agentless-live')
+    // A bare store entry with no agent (and so no factory-minted handle) is
+    // not reachable through the registry's structural dispose.
+    ctx.sessions.create(sessionId, { meta: { cwd: workspace.path } })
+
+    const rejected = await api.workspace.deleteSession(request({ sessionId }))
+    expect(rejected.result).toMatchObject({
+      ok: false,
+      error: { code: 'session-live', details: { sessionId } },
+    })
+    expect(ctx.sessions.get(sessionId)).toBeDefined()
+    expect(expectOk(await api.workspace.list(request({}))).items[0]?.sessionIds).toEqual([])
+  })
+
+  it('deletes a live session backed by the real agent loop', async () => {
+    const { api, ctx, root } = await realLoopHarness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'delete-realloop') }))).workspace
+    const sessionId = SessionId('session-real-loop-delete')
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
+    expect(ctx.agents.get(sessionId)).toBeDefined()
+
+    // The RPC must settle: a deadlock between the registry dispose and the
+    // real machine's teardown leaves the UI stuck on "Deleting session…".
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => { reject(new Error('workspace.deleteSession deadlocked over a real agent-loop session')) }, 5_000)
+    })
+    const deleted = await Promise.race([api.workspace.deleteSession(request({ sessionId })), timeout])
+    expect(expectOk(deleted).deleted).toBe(true)
+    expect(ctx.sessions.get(sessionId)).toBeUndefined()
+    expect(ctx.agents.get(sessionId)).toBeUndefined()
+    expect(expectOk(await api.workspace.list(request({}))).items[0]?.sessionIds).toEqual([])
+  }, 15_000)
+
+  it('deletes a session whose agent-loop turn is still streaming', async () => {
+    const { api, ctx, root } = await realLoopHarness()
+    const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'delete-streaming') }))).workspace
+    const sessionId = SessionId('session-streaming-delete')
+    expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
+    const agent = ctx.agents.get(sessionId)
+    if (agent === undefined) throw new Error('agent was not published')
+
+    // One turn opens and its model request never settles: the provider hangs,
+    // as a real network stall does. The delete must still converge.
+    const stalled = new (class extends LlmAdapter {
+      override providerInfo(provider: string) {
+        return { id: provider, name: provider }
+      }
+
+      override listModels(provider: string) {
+        return Promise.resolve([{ provider, id: 'mock-model', name: 'mock-model' }])
+      }
+
+      override async * stream(): AsyncIterable<never> {
+        await new Promise(() => {})
+      }
+    })()
+    ctx.llm.registerAdapter(['mock'], stalled)
+    agent.followup(createUserMessage({ content: [{ type: 'text', text: 'hold the line' }], source: { kind: 'user' } }))
+    await vi.waitFor(() => { expect(agent.status).toBe('running') })
+
+    const timeout = new Promise<never>((_, reject) => {
+      setTimeout(() => { reject(new Error('workspace.deleteSession deadlocked over a streaming turn')) }, 5_000)
+    })
+    const deleted = await Promise.race([api.workspace.deleteSession(request({ sessionId })), timeout])
+    expect(expectOk(deleted).deleted).toBe(true)
+    expect(ctx.sessions.get(sessionId)).toBeUndefined()
+    expect(ctx.agents.get(sessionId)).toBeUndefined()
+  }, 15_000)
 })

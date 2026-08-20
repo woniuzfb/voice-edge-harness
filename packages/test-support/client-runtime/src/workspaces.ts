@@ -212,4 +212,26 @@ export class TestWorkspaces implements IWorkspaces {
       draft.archivedSessionIds = [...draft.archivedSessionIds, sessionId]
     })
   }
+
+  /**
+   * Permanently delete a session (recorded). The default mirrors the
+   * production face's observable effect: the id leaves every Workspace
+   * account and the archive set.
+   * @param sessionId - session to delete.
+   */
+  async deleteSession(sessionId: SessionId): Promise<void> {
+    this.calls.push({ method: 'deleteSession', args: [sessionId] })
+    const stub = this.stubs.get('deleteSession')
+    if (stub !== undefined) {
+      await (stub(sessionId) as Promise<void>)
+      return
+    }
+    await this.update((draft) => {
+      draft.items = draft.items.map(workspace => ({
+        ...workspace,
+        sessionIds: workspace.sessionIds.filter(id => id !== sessionId),
+      }))
+      draft.archivedSessionIds = draft.archivedSessionIds.filter(id => id !== sessionId)
+    })
+  }
 }

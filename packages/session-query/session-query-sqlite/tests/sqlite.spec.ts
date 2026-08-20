@@ -163,6 +163,10 @@ class TestPersistence extends SessionPersistence {
     return [...TestPersistence.entries.values()].map(entry => structuredClone(entry.meta))
   }
 
+  delete(id: SessionIdType): Promise<void> {
+    TestPersistence.entries.delete(id)
+    return Promise.resolve()
+  }
 
   async listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]> {
     TestPersistence.snapshotSignals.push(signal)

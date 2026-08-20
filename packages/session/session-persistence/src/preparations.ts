@@ -44,6 +44,17 @@ export class SessionPreparations<Source extends PreparedSource, CommitState> {
   }
 
   /**
+   * The entry's current phase, or `undefined` when no entry exists. Delete-side
+   * callers reject `reserved`/`committing` phases instead of invalidating
+   * them: a reservation may still commit writes after the delete returns.
+   * @param id - session identity.
+   * @returns the entry's phase, or `undefined` when absent.
+   */
+  phase(id: SessionId): 'loading' | 'ready' | 'reserved' | 'committing' | undefined {
+    return this.entries.get(id)?.phase
+  }
+
+  /**
    * Observe one prepared source, sharing an in-flight read for the same id.
    * @param id - session identity.
    * @param load - cold loader used when no entry exists.

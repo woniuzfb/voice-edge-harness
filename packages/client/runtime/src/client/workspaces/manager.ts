@@ -232,6 +232,19 @@ export class WorkspaceManager {
   }
 
   /**
+   * Permanently delete one session's durable log and registry references.
+   * The server pushes `host/session-removed` on the host stream, which the
+   * sessions manager folds; there is no workspace-local state to install
+   * here (accounting slots arrive via `host/workspace-changed`).
+   * @param sessionId - the session to delete.
+   * @returns the RPC result; `session-live` is the business rejection.
+   */
+  async deleteSession(sessionId: SessionId): Promise<RpcResult<{ deleted: true }>> {
+    const { result } = await this.api.workspace.deleteSession({ sessionId })
+    return result
+  }
+
+  /**
    * Host-frame entry. Non-workspace frames are ignored so the runtime can
    * fan one host stream out to both object managers.
    * @param envelope - host stream envelope.

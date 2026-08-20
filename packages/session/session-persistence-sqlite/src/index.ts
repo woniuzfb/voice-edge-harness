@@ -190,6 +190,10 @@ export class SqliteSessionPersistence extends SessionPersistence implements Pers
     return this.coordinator.load(id)
   }
 
+  delete(id: SessionId): Promise<void> {
+    return this.coordinator.deleteSession(id)
+  }
+
   inspect(id: SessionId, signal?: AbortSignal): Promise<SessionInspection> {
     return this.coordinator.inspect(id, signal)
   }
@@ -215,6 +219,12 @@ export class SqliteSessionPersistence extends SessionPersistence implements Pers
     signal?.throwIfAborted()
     const row = this.rowFor(id)
     return row === undefined ? undefined : sqliteRevision(this.storeIdentity, row)
+  }
+
+  /** Delete the session row; `events` cascades via its foreign key. */
+  async deleteStored(id: SessionId): Promise<void> {
+    await this.ready
+    this.db.prepare('DELETE FROM sessions WHERE id = ?').run(id)
   }
 
   /**

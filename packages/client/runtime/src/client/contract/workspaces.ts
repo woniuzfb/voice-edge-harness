@@ -91,4 +91,11 @@ export interface IWorkspaces {
    * @param sessionId - session to archive.
    */
   archiveSession(sessionId: SessionId): Promise<void>
+  /**
+   * Permanently delete a session: its durable log, workspace accounting slot,
+   * and archive-set entry. Deleting the current session clears the selection
+   * into the New Session view state (same projection rule as archive).
+   * @param sessionId - session to delete.
+   */
+  deleteSession(sessionId: SessionId): Promise<void>
 }

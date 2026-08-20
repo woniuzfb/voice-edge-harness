@@ -403,6 +403,43 @@ describe('AgentRegistry factory seam', () => {
     await expect(ctx.agents.create({ sessionId: SessionId('after-s') })).rejects.toThrow(/no agent factory/)
   })
 
+  it('structurally disposes a factory-minted handle by session id exactly once', async () => {
+    const ctx = new Context()
+    await ctx.plugin(AgentRegistry)
+    const disposed: SessionId[] = []
+    const factory: AgentFactory = {
+      async createAgent(_ownerCtx, options) {
+        return {
+          agent: stubAgent(options.sessionId),
+          dispose: () => {
+            disposed.push(options.sessionId)
+            return Promise.resolve()
+          },
+        }
+      },
+      async resume(_ownerCtx, options) {
+        return {
+          agent: stubAgent(options.resumeSessionId),
+          dispose: () => {
+            disposed.push(options.resumeSessionId)
+            return Promise.resolve()
+          },
+        }
+      },
+    }
+    ctx.agents.setFactory(factory)
+    await ctx.agents.create({ sessionId: SessionId('owned-a') })
+    await ctx.agents.resume({ resumeSessionId: SessionId('owned-b') })
+
+    await expect(ctx.agents.dispose(SessionId('owned-a'))).resolves.toBe(true)
+    // One-shot: the map entry left with the first disposal, and an id the
+    // factory never minted stays unreachable.
+    await expect(ctx.agents.dispose(SessionId('owned-a'))).resolves.toBe(false)
+    await expect(ctx.agents.dispose(SessionId('owned-b'))).resolves.toBe(true)
+    await expect(ctx.agents.dispose(SessionId('never-minted'))).resolves.toBe(false)
+    expect(disposed).toEqual([SessionId('owned-a'), SessionId('owned-b')])
+  })
+
   it('canonicalizes an already traced Service before tracing it for the caller', async () => {
     const ctx = new Context()
     await ctx.plugin(AgentRegistry)

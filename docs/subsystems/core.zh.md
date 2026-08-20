@@ -651,6 +651,22 @@ async create(options: CreateAgentOptions): Promise<AgentHandle>
 async resume(options: ResumeAgentOptions): Promise<AgentHandle>
 
 /**
+ * Structurally tear down one live agent by session id. The registry is the
+ * factory provider's host, so it holds the same structural teardown right
+ * the {@link AgentHandle} contract grants the provider ("provider unload
+ * stops and drains every live handle it made"); this method exposes that
+ * right for product-level operations (durable session delete) that must
+ * remove an agent regardless of which consumer minted it. The consumer-side
+ * capability is unchanged: normal lifecycles still run through the handles
+ * their owners keep.
+ * @param id - the session id of the live agent to dispose.
+ * @returns whether a registered handle was found and disposed; `false` for
+ *   an unknown or already-disposed id (an agent entered through
+ *   {@link register} without a factory minted handle is not reachable here).
+ */
+async dispose(id: SessionId): Promise<boolean>
+
+/**
  * Register a live agent. Throws if an agent with the same id is already
  * registered. Emits `agent/created` on registration and `agent/disposed`
  * when the calling fiber is disposed — both with the agent's scope carrier

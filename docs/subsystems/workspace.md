@@ -213,6 +213,18 @@ insertBefore(id: WorkspaceId, beforeId?: WorkspaceId): Promise<readonly Workspac
 archiveSession(sessionId: SessionId): Promise<void>
 
 /**
+ * Delete one session's durable log and every registry reference to it.
+ * Live sessions reject; an unknown id still clears any stale registry
+ * references and resolves (delete is idempotent at the registry boundary).
+ * The durable log is deleted first, so a mid-way failure leaves the log
+ * recoverable through persistence rather than losing it while the registry
+ * still lists it.
+ * @param sessionId - The session to delete.
+ * @returns resolution after durability.
+ */
+deleteSession(sessionId: SessionId): Promise<void>
+
+/**
  * Resolve by canonical directory path without creating or mutating a
  * workspace. A missing path rejects during `realpath`; an existing unowned
  * directory returns `undefined`.
@@ -224,5 +236,30 @@ async resolveByPath(path: string): Promise<Workspace | undefined>
 
 Types: [SessionId](core.md)
 
-Source: [`packages/workspace/workspace/src/index.ts:92`](../../packages/workspace/workspace/src/index.ts)
+Source: [`packages/workspace/workspace/src/index.ts:114`](../../packages/workspace/workspace/src/index.ts)
+
+<a id="workspace-events"></a>
+
+### `workspace/*` events
+
+<a id="workspacesession-deleted--emit"></a>
+
+#### `workspace/session-deleted` — emit
+
+One session's durable log and every registry reference were deleted. Fires after the durable deletion committed; listener failures are logged and contained.
+
+```ts cordis-catalog
+/**
+ * One session's durable log and every registry reference were deleted.
+ * Fires after the durable deletion committed; listener failures are logged
+ * and contained.
+ * @param sessionId - the deleted session id.
+ * @mode emit
+ */
+'workspace/session-deleted'(sessionId: SessionId): void
+```
+
+Types: [SessionId](core.md)
+
+Source: [`packages/workspace/workspace/src/index.ts:91`](../../packages/workspace/workspace/src/index.ts)
 <!-- END GENERATED cordis-surface -->

@@ -106,4 +106,17 @@ export interface WorkspaceApi {
    */
   archiveSession(request: RpcRequest<{ sessionId: SessionId }>):
   Promise<RpcResponse<{ archivedSessionIds: SessionId[] }>>
+
+  /**
+   * Permanently deletes one session's durable log and every registry
+   * reference to it (workspace accounting slot, archive-set entry). A live
+   * agent is disposed through the agent registry's structural dispose inside
+   * this call before the delete, regardless of which component minted it; a
+   * bare live session with no factory-minted handle fails with `session-live`.
+   * Any non-live id resolves (idempotent), clearing stale registry
+   * references. The session's row disappears from the client list via
+   * `host/session-removed` on the host stream.
+   */
+  deleteSession(request: RpcRequest<{ sessionId: SessionId }>):
+  Promise<RpcResponse<{ deleted: true }>>
 }

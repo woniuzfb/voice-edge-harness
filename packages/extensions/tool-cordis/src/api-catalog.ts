@@ -261,6 +261,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the handle after setup, rollback-covered publication, and loop start complete.',
       },
       {
+        signature: 'async dispose(id: SessionId): Promise<boolean>',
+        description: 'Structurally tear down one live agent by session id. The registry is the factory provider\'s host, so it holds the same structural teardown right the AgentHandle contract grants the provider ("provider unload stops and drains every live handle it made"); this method exposes that right for product-level operations (durable session delete) that must remove an agent regardless of which consumer minted it. The consumer-side capability is unchanged: normal lifecycles still run through the handles their owners keep.',
+        parameters: [{ name: 'id', description: 'the session id of the live agent to dispose.' }],
+        returns: 'whether a registered handle was found and disposed; `false` for an unknown or already-disposed id (an agent entered through {@link register} without a factory minted handle is not reachable here).',
+      },
+      {
         signature: 'register(agent: Agent): () => void',
         description: 'Register a live agent. Throws if an agent with the same id is already registered. Emits `agent/created` on registration and `agent/disposed` when the calling fiber is disposed — both with the agent\'s scope carrier (`scopeTarget(agent, agent)`): the subject is the agent in hand, so the emits are scope-filtered regardless of which context invoked `register` (calling through `agent.ctx` scopes EFFECTS; dispatch scoping always requires passing the carrier). Returns the disposer.',
         parameters: [{ name: 'agent', description: 'the already-constructed agent to record in the store.' }],
@@ -1073,6 +1079,11 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Lightweight listing from metadata, without a full-log parse.',
         parameters: [{ name: 'signal', description: 'optional cancellation for backend listing work.' }],
         returns: 'one header per materialized session.',
+      },
+      {
+        signature: 'abstract delete(id: SessionId): Promise<void>',
+        description: 'Durably delete one session\'s stored log and every session-local artifact. This is the only non-append-only persistence operation; it exists because the user owns the on-disk record and may retract it. A session bound to a live Session through this backend rejects; an id with no stored artifact resolves without writing (delete is idempotent at the durability boundary).',
+        parameters: [{ name: 'id', description: 'the persisted session to delete.' }],
       },
       {
         signature: 'abstract listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]>',
@@ -2152,6 +2163,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'resolution after durability.',
       },
       {
+        signature: 'deleteSession(sessionId: SessionId): Promise<void>',
+        description: 'Delete one session\'s durable log and every registry reference to it. Live sessions reject; an unknown id still clears any stale registry references and resolves (delete is idempotent at the registry boundary). The durable log is deleted first, so a mid-way failure leaves the log recoverable through persistence rather than losing it while the registry still lists it.',
+        parameters: [{ name: 'sessionId', description: 'The session to delete.' }],
+        returns: 'resolution after durability.',
+      },
+      {
         signature: 'async resolveByPath(path: string): Promise<Workspace | undefined>',
         description: 'Resolve by canonical directory path without creating or mutating a workspace. A missing path rejects during `realpath`; an existing unowned directory returns `undefined`.',
         parameters: [{ name: 'path', description: 'Existing directory path in any spelling.' }],
@@ -2610,6 +2627,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'A workflow run started — the script\'s meta block validated, the body about to execute.',
     description: 'A workflow run started — the script\'s meta block validated, the body about to execute. Paired with Events[\'workflow/end\'].',
     parameters: [{ name: 'info', description: 'the run\'s identity snapshot (id + meta).' }],
+  },
+  {
+    name: 'workspace/session-deleted',
+    mode: 'emit',
+    signature: '\'workspace/session-deleted\'(sessionId: SessionId): void',
+    summary: 'One session\'s durable log and every registry reference were deleted.',
+    description: 'One session\'s durable log and every registry reference were deleted. Fires after the durable deletion committed; listener failures are logged and contained.',
+    parameters: [{ name: 'sessionId', description: 'the deleted session id.' }],
   },
 ]
 
@@ -3645,7 +3670,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'RpcErrorDetailsMap',
-    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'agent-preset-not-found\': {\n        agentPreset: string;\n      /* …truncated — full shape in source */',
+    declaration: 'export interface RpcErrorDetailsMap {\n    \'bad-request\': {\n        issues: ZodIssue[];\n    };\n    \'cancelled\': {};\n    \'session-not-found\': {\n        sessionId: SessionId;\n    };\n    \'session-live\': {\n        sessionId: SessionId;\n    };\n    \'model-unavailable\': {\n        provider: string;\n        model: string;\n    };\n    \'session-conflict\': {\n        sessionId: SessionId;\n        requestedCwd: string;\n        existingCwd?: string;\n    };\n    \'invalid-time-zone\': {\n        value: string;\n    };\n    \'workspace-attach-failed\': {\n        sessionId: SessionId;\n        workspaceId: string;\n    };\n    \'workspace-not-found\': {\n        workspaceId: string;\n    };\n    \'workspace-invalid-path\': {\n        path: string;\n    };\n    \'workspace-name-conflict\': {\n        name: string;\n    };\n    \'workspace-move-invalid\': {\n        workspaceId: string;\n        sessionId: SessionId;\n        beforeSessionId?: SessionId;\n    };\n    \'directory-unreadable\': {\n        path: string;\n    };\n    \'directory-exists\': {\n        path: string;\n    };\n    \'directory-create-failed\': {\n        path: string;\n    };\n    \'directory-picker-unavailable\': {\n        capability: string;\n    };\n    \'agent-preset-read-only\': {\n        agentPreset: string;\n        reason: string;\n    };\n    \'agent-preset-locked\': {\n        sessionId: SessionId;\n        agentPreset: string;\n    };\n    \'agent-preset-conflict\': {\n        sessionId: SessionId;\n        requestedPreset: string;\n        existingPreset?: string;\n    };\n    \'ag /* …truncated — full shape in source */',
   },
   {
     name: 'RpcId',

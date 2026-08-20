@@ -293,6 +293,17 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
+   * Permanently delete a session's durable log and registry references.
+   * Clearing a deleted current selection is the projection sweep's job (one
+   * rule for the local echo and a remote tab's frame alike).
+   * @param sessionId - session to delete.
+   */
+  async deleteSession(sessionId: SessionId): Promise<void> {
+    const result = await this.manager.deleteSession(sessionId)
+    if (!result.ok) throw new Error(`session delete failed: ${result.error.code}: ${result.error.message}`)
+  }
+
+  /**
    * Move a session within its Workspace's manual order (DOM-insertBefore-like).
    * @param workspaceId - owning workspace.
    * @param sessionId - accounted session to move.

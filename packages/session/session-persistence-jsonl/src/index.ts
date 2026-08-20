@@ -189,6 +189,10 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     return this.coordinator.load(id)
   }
 
+  delete(id: SessionId): Promise<void> {
+    return this.coordinator.deleteSession(id)
+  }
+
   inspect(id: SessionId, signal?: AbortSignal): Promise<SessionInspection> {
     return this.coordinator.inspect(id, signal)
   }
@@ -446,6 +450,19 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   /** List valid unique stored sessions' metadata (header line only — no full-log parse). */
   async list(signal?: AbortSignal): Promise<SessionHeader[]> {
     return (await this.listArtifacts(signal)).map(artifact => artifact.header)
+  }
+
+  /**
+   * Delete one session's directory in every project scope. `force` tolerates
+   * an absent directory (idempotent delete); the directory's other
+   * session-local artifacts go with it because they are owned by the session.
+   */
+  async deleteStored(id: SessionId): Promise<void> {
+    await this.ensureRootEncoding()
+    const segment = encodeSegment(id)
+    for (const project of await this.listProjectDirs()) {
+      await rm(join(project, segment), { recursive: true, force: true })
+    }
   }
 
   /** List metadata plus a stat-derived identity for each append-only log. */

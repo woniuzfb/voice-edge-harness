@@ -48,7 +48,8 @@ async function harness(options: HarnessOptions = {}) {
   const list = vi.fn(async () => listed)
   const load = vi.fn(() => { throw new Error('event bodies must not be loaded') })
   const inspect = vi.fn(() => { throw new Error('event bodies must not be inspected') })
-  ctx.provide('sessionPersistence', { list, load, inspect } as never)
+  const deleteLog = vi.fn(async (_id: SessionId) => {})
+  ctx.provide('sessionPersistence', { list, load, inspect, delete: deleteLog } as never)
 
   if (options.sessionStore === true) {
     await ctx.plugin(SessionStore)
@@ -62,6 +63,8 @@ async function harness(options: HarnessOptions = {}) {
 
   const changes: DomainChanged[] = []
   ctx.on('domain/changed', (change) => { changes.push(change) })
+  const sessionDeletedEvents: SessionId[] = []
+  ctx.on('workspace/session-deleted', (sessionId) => { sessionDeletedEvents.push(sessionId) })
   const fiber = await ctx.plugin(WorkspaceRegistry)
   const initChanges = [...changes]
   changes.length = 0
@@ -75,6 +78,8 @@ async function harness(options: HarnessOptions = {}) {
     list,
     load,
     inspect,
+    deleteLog,
+    sessionDeletedEvents,
     setSessions: (headers: SessionHeader[]) => { listed = headers },
   }
 }
@@ -940,5 +945,70 @@ describe('registry-global session archive', () => {
     )
     const upgraded = await harness({ pool: legacy })
     expect(upgraded.registry.archivedSessionIds).toEqual([])
+  })
+})
+
+describe('registry session delete', () => {
+  it('deletes the durable log first, then clears accounting and archive membership, and emits the event', async () => {
+    const dir = await makeDir('delete-home')
+    const result = await harness({ sessions: [header('gone', dir, 100), header('kept', dir, 200)] })
+    const workspace = result.registry.list()[0]!
+    await result.registry.archiveSession(SessionId('gone'))
+
+    const observed: string[] = []
+    result.deleteLog.mockImplementationOnce(async () => {
+      // Log-first ordering: accounting still lists the session when its log goes.
+      observed.push(workspace.sessionIds.includes(SessionId('gone')) ? 'accounted' : 'detached-too-early')
+    })
+    await result.registry.deleteSession(SessionId('gone'))
+
+    expect(observed).toEqual(['accounted'])
+    expect(result.deleteLog).toHaveBeenCalledOnce()
+    expect(workspace.sessionIds).not.toContain('gone')
+    expect(workspace.sessionIds).toContain('kept')
+    expect(result.registry.archivedSessionIds).toEqual([])
+    expect(storedState(result.pool).archivedSessionIds).toEqual([])
+    expect(storedRecord(result.pool, workspace.id).sessionIds).not.toContain('gone')
+    expect(result.sessionDeletedEvents).toEqual(['gone'])
+  })
+
+  it('keeps every reference when the durable log deletion fails', async () => {
+    const dir = await makeDir('delete-failure')
+    const result = await harness({ sessions: [header('gone', dir, 100)] })
+    const workspace = result.registry.list()[0]!
+    await result.registry.archiveSession(SessionId('gone'))
+    result.deleteLog.mockRejectedValueOnce(new Error('disk fault'))
+
+    await expect(result.registry.deleteSession(SessionId('gone'))).rejects.toThrow(/disk fault/)
+    expect(workspace.sessionIds).toContain('gone')
+    expect(result.registry.archivedSessionIds).toEqual(['gone'])
+    expect(storedState(result.pool).archivedSessionIds).toEqual(['gone'])
+    expect(result.sessionDeletedEvents).toEqual([])
+  })
+
+  it('rejects a live session without touching persistence', async () => {
+    const live = await makeDir('delete-live')
+    const result = await harness({ sessions: [], liveSessions: [header('live', live, 100)] })
+    await expect(result.registry.deleteSession(SessionId('live')))
+      .rejects.toThrow(/cannot delete session 'live': it is live/)
+    expect(result.deleteLog).not.toHaveBeenCalled()
+  })
+
+  it('resolves for an unknown id while clearing a stale archived entry after restart', async () => {
+    const dir = await makeDir('delete-stale')
+    const pool = new MemoryMediaPool()
+    const first = await harness({ pool, sessions: [header('s1', dir, 100)] })
+    await first.registry.archiveSession(SessionId('s1'))
+    await first.fiber.dispose()
+
+    // The log vanished outside the product: the restart no longer knows the
+    // id, but the durable archive set still lists it.
+    const second = await harness({ pool, sessions: [] })
+    expect(second.registry.archivedSessionIds).toEqual(['s1'])
+    await expect(second.registry.deleteSession(SessionId('s1'))).resolves.toBeUndefined()
+    expect(second.deleteLog).not.toHaveBeenCalled()
+    expect(second.registry.archivedSessionIds).toEqual([])
+    expect(storedState(pool).archivedSessionIds).toEqual([])
+    expect(second.sessionDeletedEvents).toEqual(['s1'])
   })
 })

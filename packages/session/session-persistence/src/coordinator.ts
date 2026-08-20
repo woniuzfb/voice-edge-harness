@@ -199,6 +199,16 @@ export interface PersistenceBackend<TornMarker = unknown> {
   list(signal?: AbortSignal): Promise<SessionHeader[]>
 
   /**
+   * Durably delete every stored artifact for one session id across all backend
+   * storage scopes. An id with no stored artifact is an idempotent no-op. The
+   * coordinator publishes this behind the per-id chain after its live-owner and
+   * draining-retirement checks, so implementations can assume no concurrent
+   * append for the same id.
+   * @param id - persisted session id to delete.
+   */
+  deleteStored(id: SessionId): Promise<void>
+
+  /**
    * Optional side-effect-free artifact locator, used to point refusal
    * diagnostics ({@link SessionFormatUnsupportedError}) at the raw log.
    * Backends without one artifact per session omit it or return `undefined`.
@@ -655,6 +665,34 @@ export class PersistenceCoordinator<TornMarker = unknown> {
     }
     // Pure lazy: record intent only. No artifact until the first append.
     this.states.set(meta.id, { meta, cursor: 0, materialized: false })
+  }
+
+  /**
+   * Durably delete one session's stored log after the coordinator's own state
+   * for it is dropped. Live-owned and still-draining sessions reject: their
+   * write path could re-materialize a deleted log. Deleting an id with no
+   * tracked state and no stored artifact resolves (idempotent).
+   * @param id - the persisted session to delete.
+   */
+  deleteSession(id: SessionId): Promise<void> {
+    return this.serialize(id, () => this.deleteSessionCore(id))
+  }
+
+  private async deleteSessionCore(id: SessionId): Promise<void> {
+    const state = this.states.get(id)
+    if (state?.owner !== undefined) {
+      throw new Error(`session "${id}" is live in this backend; dispose it before deleting`)
+    }
+    if (this.retirements.has(id)) {
+      throw new Error(`session "${id}" is still draining its final writes; retry the delete once it settles`)
+    }
+    const phase = this.preparations.phase(id)
+    if (phase === 'reserved' || phase === 'committing') {
+      throw new Error(`session "${id}" has a reserved persisted preparation; retry the delete once it commits`)
+    }
+    this.preparations.invalidate(id)
+    await this.backend.deleteStored(id)
+    this.states.delete(id)
   }
 
   // `async` so synchronous materialization failures below reject (not throw) per

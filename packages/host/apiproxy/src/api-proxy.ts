@@ -25,7 +25,8 @@ import { isUserInvocable } from '@deepseek-ai/dsh-skill'
 import type { Workspace, WorkspaceRecord } from '@deepseek-ai/dsh-workspace'
 import {
   workspaceDomainState, workspaceRecord, WorkspaceId as brandWorkspaceId,
-  WorkspaceMoveInvalidError, WorkspaceOrderInvalidError, WorkspaceUnknownSessionError,
+  WorkspaceLiveSessionError, WorkspaceMoveInvalidError, WorkspaceOrderInvalidError,
+  WorkspaceUnknownSessionError,
 } from '@deepseek-ai/dsh-workspace'
 // Type-only: brings the `ctx.tools` Context merge into this program (viewFor reads presenters).
 import {
@@ -2874,6 +2875,39 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
         }
         return ok(request, { archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds] })
       },
+
+      async deleteSession(request) {
+        const { sessionId } = request.payload
+        // A live agent is torn down first through the registry's structural
+        // dispose: loop stop, exit await, log flush — so the durable delete
+        // removes exactly what was written, regardless of which component
+        // (gateway, voice-edge bridge, subagent parent) minted the agent. A
+        // live session with no registry handle (a bare `agents.register`
+        // entry) keeps the `session-live` rejection.
+        if (ctx.agents.get(sessionId) !== undefined) {
+          const disposed = await ctx.agents.dispose(sessionId)
+          if (!disposed) {
+            return err(request, {
+              code: 'session-live',
+              message: `cannot delete session '${sessionId}': it is live without a disposable handle; dispose it first`,
+              details: { sessionId },
+            })
+          }
+        }
+        try {
+          await ctx.workspaceRegistry.deleteSession(sessionId)
+        } catch (error: unknown) {
+          // Only the registry's live-session rejection is the business code;
+          // storage/durability failures propagate as internal errors.
+          if (!(error instanceof WorkspaceLiveSessionError)) throw error
+          return err(request, {
+            code: 'session-live',
+            message: error.message,
+            details: { sessionId },
+          })
+        }
+        return ok(request, { deleted: true })
+      },
     },
 
     host: {
@@ -3509,6 +3543,12 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           }),
           ctx.on('session/disposed', (session: Session) => {
             queue.push(frame({ type: 'host/session-removed', sessionId: session.id }))
+          }),
+          // A durable session deletion is not a live-session disposal, but the
+          // client-side effect is identical: the row leaves the list and the
+          // conversation view, so the same frame carries it.
+          ctx.on('workspace/session-deleted', (sessionId: SessionId) => {
+            queue.push(frame({ type: 'host/session-removed', sessionId }))
           }),
           ctx.on('agent/status', ({ agent, status }: { agent: Agent; status: AgentStatus }) => {
             queue.push(frame({ type: 'host/session-status', sessionId: agent.id, running: status === 'running' }))

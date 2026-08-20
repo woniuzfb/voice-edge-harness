@@ -944,7 +944,7 @@ Source: [`packages/core/session/src/types.ts:264`](../packages/core/session/src/
 }
 ```
 
-Source: [`packages/host/voice-edge/src/types.ts:57`](../packages/host/voice-edge/src/types.ts)
+Source: [`packages/host/voice-edge/src/types.ts:59`](../packages/host/voice-edge/src/types.ts)
 
 <a id="voice-edgemodel-event--log-only"></a>
 
@@ -967,7 +967,7 @@ Source: [`packages/host/voice-edge/src/types.ts:57`](../packages/host/voice-edge
 }
 ```
 
-Source: [`packages/host/voice-edge/src/types.ts:33`](../packages/host/voice-edge/src/types.ts)
+Source: [`packages/host/voice-edge/src/types.ts:35`](../packages/host/voice-edge/src/types.ts)
 
 <a id="voice-edgesync--log-only"></a>
 
@@ -975,8 +975,10 @@ Source: [`packages/host/voice-edge/src/types.ts:33`](../packages/host/voice-edge
 
 ```ts persistence-catalog
 /**
- * One voice_edge.py turn was bound to this Harness session. `messages` is
- * a bounded role/text projection of the client history at sync time — a
+ * One user turn delivered by voice_edge.py after `/session/bind`.
+ * `messages` carries the user's fresh turn text — the relay-extracted
+ * body of the prompt submitted to the external model, without per-turn
+ * transport framing (relayed system prose, tool-instruction XML) — a
  * diagnostic mirror, never a model-context source. `bootKey`/`fullKey`
  * are the voice-edge identity hashes aliased to this session.
  */
@@ -990,7 +992,7 @@ Source: [`packages/host/voice-edge/src/types.ts:33`](../packages/host/voice-edge
 }
 ```
 
-Source: [`packages/host/voice-edge/src/types.ts:19`](../packages/host/voice-edge/src/types.ts)
+Source: [`packages/host/voice-edge/src/types.ts:21`](../packages/host/voice-edge/src/types.ts)
 
 <a id="voice-edgetool-call--log-only"></a>
 
@@ -1005,7 +1007,7 @@ Source: [`packages/host/voice-edge/src/types.ts:19`](../packages/host/voice-edge
 }
 ```
 
-Source: [`packages/host/voice-edge/src/types.ts:42`](../packages/host/voice-edge/src/types.ts)
+Source: [`packages/host/voice-edge/src/types.ts:44`](../packages/host/voice-edge/src/types.ts)
 
 <a id="voice-edgetool-result--log-only"></a>
 
@@ -1023,7 +1025,7 @@ Source: [`packages/host/voice-edge/src/types.ts:42`](../packages/host/voice-edge
 }
 ```
 
-Source: [`packages/host/voice-edge/src/types.ts:48`](../packages/host/voice-edge/src/types.ts)
+Source: [`packages/host/voice-edge/src/types.ts:50`](../packages/host/voice-edge/src/types.ts)
 
 ### `web/*`
 
