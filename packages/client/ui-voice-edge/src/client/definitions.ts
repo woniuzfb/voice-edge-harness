@@ -12,7 +12,7 @@
 
 import type {
   ConversationNodeDefinition,
-} from '@deepseek-ai/dsh-client-runtime/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
 // Type-only edge: the `voice-edge/*` SessionEventMap merge lives with the
 // event producer; the client never re-declares payload shapes.
 import type {} from '@deepseek-ai/dsh-voice-edge/types'
@@ -48,7 +48,7 @@ export interface VoiceEdgeToolNode {
   readonly durationMs?: number
 }
 
-declare module '@deepseek-ai/dsh-client-ui-conversation/client' {
+declare module '@deepseek-ai/dsh-client-ui-chat/client' {
   interface ChatNodeDataMap {
     /** Mirrored voice-edge user turn. */
     'voice-edge-user': VoiceEdgeUserNode

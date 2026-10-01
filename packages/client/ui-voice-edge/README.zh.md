@@ -1,9 +1,27 @@
+---
+description: "Voice Edge 镜像的会话视图渲染，呈现镜像轮次、思考步骤、工具调用与用户气泡。"
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-client-ui-voice-edge
 
 [English](README.md) | 中文
 
-Voice Edge 镜像的会话视图渲染。Host 桥（`@deepseek-ai/dsh-voice-edge`）把 voice_edge.py 的轮次记录为仅日志的 `voice-edge/*` 会话事件；没有这个插件，就没有任何 `ConversationNodeDefinition` 匹配它们，桥接会话在 Web 客户端里渲染为空白。
+## 概述
 
+使用本包在 Web 客户端聊天视图中渲染外部 Voice Edge 对话轮次。它匹配 `@deepseek-ai/dsh-voice-edge` 记录的仅日志 `voice-edge/*` 会话事件，渲染用户轮次、镜像思考块、助手 Markdown 文本与工具执行行。若不加载此插件，桥接会话在 Web 客户端中将显示为空白。
+
+## 目录
+
+- [节点映射](#node-mapping)
+- [组合](#composition)
+- [模型体验](#model-experience)
+- [已知限制与暂缓事项](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="node-mapping"></a>
 ## 节点映射
 
 | 会话事件 | 会话行 |
@@ -16,6 +34,9 @@ Voice Edge 镜像的会话视图渲染。Host 桥（`@deepseek-ai/dsh-voice-edge
 
 带文本的用户与助手气泡在块外右下角携带始终可见的操作行：复制经共享剪贴板辅助函数原样写入镜像文本（成功反馈沿用会话消息的对勾切换）；用户行额外携带箭头跳跃按钮，平滑滚动到上一条/下一条用户消息——跳跃在本模块打上 `data-voice-edge-user` 标记的行之间游走，因此在重放与翻页下都保持正确，且在流的两端为 no-op。每轮以其用户行开头，该行在聊天列统一行距之上携带额外顶部间距，使新轮读起来是一次断开，而不只是又一行。
 
+-----
+
+<a id="composition"></a>
 ## 组合
 
 包通过 package.json 的 `dsh.client` 声明浏览器半边；Web bundle 按 id 挂载：
@@ -25,6 +46,9 @@ Voice Edge 镜像的会话视图渲染。Host 桥（`@deepseek-ai/dsh-voice-edge
   name: '@deepseek-ai/dsh-client-ui-voice-edge'
 ```
 
+-----
+
+<a id="model-experience"></a>
 ## 模型体验
 
 无——本包只是渲染另一个表面模型流的镜像；不注册提示词、工具、消息或提供方请求。
@@ -35,4 +59,16 @@ Voice Edge 镜像的会话视图渲染。Host 桥（`@deepseek-ai/dsh-voice-edge
 
 ## 已知限制与暂缓事项
 
+<a id="known-limitations-and-deferred-work"></a>
+
 - 镜像是只读的：镜像行上没有重试、分支或反馈操作。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者工作上下文——点击展开</summary>
+
+无。
+
+</details>

@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-归档（[session archive](2026-07-31-session-archive-global-set.zh.md)）只是隐藏会话：持久日志永远留在磁盘上，产品内没有任何入口能移除它。要回收磁盘或清除一份敏感转录，只能在产品外手动删除 sessions 根目录下的目录，而手动删除会留下过期的 registry 状态——归档集合成员资格与 workspace 记账槽位——下次重启时依然可见。会话行菜单根本没有破坏性入口；最初的归档决策已把仅可视的 "Delete session" 占位改造成了非破坏性动作。
+归档（[session archive](../../archived/feature/2026-07-31-session-archive-global-set.md)）只是隐藏会话：持久日志永远留在磁盘上，产品内没有任何入口能移除它。要回收磁盘或清除一份敏感转录，只能在产品外手动删除 sessions 根目录下的目录，而手动删除会留下过期的 registry 状态——归档集合成员资格与 workspace 记账槽位——下次重启时依然可见。会话行菜单根本没有破坏性入口；最初的归档决策已把仅可视的 "Delete session" 占位改造成了非破坏性动作。
 
 ## Decision
 

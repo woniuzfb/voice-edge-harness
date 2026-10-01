@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-voice-edge-client-owned-mirror-appends.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-19-voice-edge-client-owned-mirror-appends.md
-2026-08-19-voice-edge-client-owned-mirror-appends.md: a2e8066121e973a3995f600db51472e57d3951cb
-2026-08-19-voice-edge-client-owned-mirror-appends.zh.md: 8190f8a6782ff2f5b3bfdeca68a6dcfb132237e7
+/agent-note-voice-edge-mirror-appends-are-client-delivered:
+  en: 8b4032ca69b43b6c
+  zh: 1ea824063e9e8001
+/agent-note-voice-edge-mirror-appends-are-client-delivered/problem:
+  en: a1d057812ba5e19e
+  zh: 824e09d0a0046840
+/agent-note-voice-edge-mirror-appends-are-client-delivered/decision:
+  en: 2b617c39b02fed28
+  zh: ac2f586d3adad68a
+/agent-note-voice-edge-mirror-appends-are-client-delivered/alternatives-considered:
+  en: ea6451f927a24bb8
+  zh: ee1d5a46b6a81cfe
+/agent-note-voice-edge-mirror-appends-are-client-delivered/consequences:
+  en: f2a8c60df1741f6a
+  zh: bd3b5cf9a019454c

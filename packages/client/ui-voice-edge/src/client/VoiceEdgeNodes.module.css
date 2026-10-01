@@ -28,6 +28,13 @@
 
 /* Mirrored user text renders literal through MessageText, whose own .text
    carries pre-wrap; the mirror's re-embedded inline images stack as blocks. */
+.text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: inherit;
+  line-height: inherit;
+}
+
 .userImage {
   display: block;
   width: auto;

@@ -1,6 +1,34 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-voice-edge/README.md
-README.md: f29869e585694e4a2d6ddcf1b3c109de2a7e2345
-README.zh.md: 8d5eb68d0425382292d22aead2fc14fb153b276a
+/:
+  en: c080353a8f999973
+  zh: da3e104a6b17e554
+/deepseek-ai-dsh-client-ui-voice-edge:
+  en: 616db7c2807a9f1c
+  zh: 067ac7d4a3877cbd
+/deepseek-ai-dsh-client-ui-voice-edge/summary:
+  en: 3e5689699dfa8917
+  zh: 0afdf8822a314310
+/deepseek-ai-dsh-client-ui-voice-edge/table-of-contents:
+  en: 234a25f5e014ed5e
+  zh: 351ee2c8d737c7f8
+/deepseek-ai-dsh-client-ui-voice-edge/node-mapping:
+  en: f88f2cd261a44eb4
+  zh: 41f71afa75d6ecc1
+/deepseek-ai-dsh-client-ui-voice-edge/composition:
+  en: 4ed70f5eb29ac6a4
+  zh: 56f78e48955b1ac4
+/deepseek-ai-dsh-client-ui-voice-edge/model-experience:
+  en: 80b3a29662a9a23d
+  zh: 702720c6bd5bf73b
+/deepseek-ai-dsh-client-ui-voice-edge/model-experience/kv-cache-effect:
+  en: 258032fce91f2e58
+  zh: cb6775f0f5fc0611
+/deepseek-ai-dsh-client-ui-voice-edge/known-limitations-and-deferred-work:
+  en: b8cb3ae1b41ab6bd
+  zh: 8f4f3294735ac645
+/deepseek-ai-dsh-client-ui-voice-edge/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

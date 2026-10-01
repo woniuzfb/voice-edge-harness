@@ -1,9 +1,29 @@
+---
+description: "Voice Edge bridge letting an external voice_edge.py process bind conversations, mirror model events, and execute Harness tools over HTTP."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-voice-edge
 
 English | [中文](README.zh.md)
 
-Voice Edge bridge: lets an external `voice_edge.py` process bind its conversations to Harness sessions, mirror model events into the durable session log, and execute Harness tools — all over a token-authenticated HTTP prefix on the composed `webServer` service.
+## Summary
 
+Use this package to bridge an external `voice_edge.py` process with DeepSeek Harness over HTTP. It allows external conversations to bind to Harness sessions, mirror client-delivered model turns into the durable session log, and execute Harness tools as the conversation agent. The bridge never returns model context or submits agent loop turns; session identity is hashed and token authentication protects all endpoints.
+
+## Table of Contents
+
+- [Boundary contract](#boundary-contract)
+- [Endpoints](#endpoints)
+- [Session events](#session-events)
+- [Configuration](#configuration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="boundary-contract"></a>
 ## Boundary contract
 
 - The plugin **never returns model context** (no messages, system prompts, or assembled history). `voice_edge.py` owns the model request and the client-visible output; the Harness session is a durable mirror plus a tool-execution host.
@@ -11,6 +31,9 @@ Voice Edge bridge: lets an external `voice_edge.py` process bind its conversatio
 - The Harness agent created per conversation is a scope/session container only. The plugin never submits inbox work, so the agent loop never runs a model for it.
 - Session identity is `voice-edge-<sha256(conversation_key)>`; the raw key never enters paths or external resource names.
 
+-----
+
+<a id="endpoints"></a>
 ## Endpoints
 
 All endpoints live under `config.path` (default `/api/voice-edge`), require `Authorization: Bearer <config.token>`, and accept/return JSON.
@@ -23,6 +46,9 @@ All endpoints live under `config.path` (default `/api/voice-edge`), require `Aut
 
 Ack fields on success: `conversation_key`, `harness_session_id` (diagnostic), `synced`, `sequence`. Failures return `{ synced: false, error: { message, type } }` with an HTTP status. `type` values the client cannot deliver (`voice-edge/tool-call`, `voice-edge/tool-result`, unknowns) fail with `unsupported_event` (400).
 
+-----
+
+<a id="session-events"></a>
 ## Session events
 
 Log-only mirror events (merged into `SessionEventMap`, registered in the generated persistence catalog): `voice-edge/sync`, `voice-edge/model-event`, `voice-edge/tool-call`, `voice-edge/tool-result`, `voice-edge/finish`.
@@ -43,6 +69,9 @@ The boot/full-key alias tables are in-memory only, so after a host restart a lat
 
 A durable delete (`workspace.deleteSession`) structurally disposes the conversation's agent through the agent registry before removing the log. The bridge listens for the resulting `session/disposed` and drops its conversation record, so the next `/session/bind` with the same key creates a fresh session — no stale agent reference, no adoption of the deleted log.
 
+-----
+
+<a id="configuration"></a>
 ## Configuration
 
 ```yaml
@@ -65,9 +94,12 @@ The composition must also carry `@deepseek-ai/dsh-host-webserver` (the HTTP carr
 
 `autoApprove: true` answers `approval/request` with `allowed-once` **only for agents this bridge created** — Voice Edge turns are non-interactive, so the default fail-closed stance would deny every guarded tool. All other agents delegate to the next answerer unchanged.
 
+-----
+
+<a id="model-experience"></a>
 ## Model Experience
 
-None, as the bridge mirrors an external model loop and assembles no Harness model context; executed tool results return to `voice_edge.py` only.
+None, as the bridge mirrors an external model loop and never assembles Harness model context; executed tool results return to voice_edge.py only.
 
 #### KV Cache effect
 
@@ -75,5 +107,17 @@ None; the Harness agent loop never runs a model for mirror sessions, so no reque
 
 ## Known Limitations and Deferred Work
 
+<a id="known-limitations-and-deferred-work"></a>
+
 - Mirror texts are stored verbatim with no length caps; `maxBodyBytes` (default 8 MiB) is the single size bound, enforced at the HTTP wire. A fresh turn whose re-embedded inline images push the event past `maxBodyBytes` mirrors nothing for that turn (fail-open) — raise the bound in cordis.yml if you mirror image-heavy turns.
 - Conversations evict from memory by `maxConversations` recency (disposing their agent); requests against an evicted conversation fail with `unknown_conversation` until the next `/session/bind` re-binds it to the same durable session.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+None.
+
+</details>

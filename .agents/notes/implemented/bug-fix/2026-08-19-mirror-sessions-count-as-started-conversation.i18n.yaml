@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-mirror-sessions-count-as-started-conversation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-mirror-sessions-count-as-started-conversation.md
-2026-08-19-mirror-sessions-count-as-started-conversation.md: e33daa8039017673a3dc05ada69788ed13881472
-2026-08-19-mirror-sessions-count-as-started-conversation.zh.md: 71c6989366f2d6206631aa9a12f02ae7048948a1
+/agent-note-mirror-sessions-count-as-a-started-conversation:
+  en: 290d74df5edc02d2
+  zh: de25559843b99728
+/agent-note-mirror-sessions-count-as-a-started-conversation/problem:
+  en: 40ec5216c35f1402
+  zh: 692e3c865cc3683b
+/agent-note-mirror-sessions-count-as-a-started-conversation/decision:
+  en: 91a4a9254eecaa4a
+  zh: 4a33722edd57e1b8
+/agent-note-mirror-sessions-count-as-a-started-conversation/alternatives-considered:
+  en: 4537ba58fc901c4f
+  zh: fa58f4cf78d4b7a4
+/agent-note-mirror-sessions-count-as-a-started-conversation/consequences:
+  en: cd40b17ed8567b34
+  zh: d1e0b1ee79f79ac5

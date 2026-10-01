@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/voice-edge/README.md
-README.md: 37915bc0197b2f0026d5cb031eab4f8fa6da7a3c
-README.zh.md: 92297fb1f5ec3442884a5f7e32d12b79838df6fa
+/:
+  en: 6c7c0b078fa49177
+  zh: 48c3c547867a2fc1
+/deepseek-ai-dsh-voice-edge:
+  en: aec951a01419e41d
+  zh: e7008035a17e66d2
+/deepseek-ai-dsh-voice-edge/summary:
+  en: 4e8acce928b98e72
+  zh: 8969d3111d3b795f
+/deepseek-ai-dsh-voice-edge/table-of-contents:
+  en: 73640d54fdf12589
+  zh: 2f5803b3ce9e0077
+/deepseek-ai-dsh-voice-edge/boundary-contract:
+  en: 1b3ee57af6f6c1b0
+  zh: 82e9a2fb12f8166c
+/deepseek-ai-dsh-voice-edge/endpoints:
+  en: 4a7fc4e05339183b
+  zh: 724b96d86eed0e03
+/deepseek-ai-dsh-voice-edge/session-events:
+  en: e7dfb670d22da983
+  zh: ab09e22bf5ad0be9
+/deepseek-ai-dsh-voice-edge/session-events/session-titles:
+  en: ef7fe1d94763b419
+  zh: d141c45493f9774f
+/deepseek-ai-dsh-voice-edge/session-events/restart-adoption:
+  en: 0df3e4060807e1b5
+  zh: da5926f6648cfa63
+/deepseek-ai-dsh-voice-edge/session-events/durable-delete:
+  en: c84ebd544528fe66
+  zh: 46db60a4a2edff7b
+/deepseek-ai-dsh-voice-edge/configuration:
+  en: 99881ac8c6aee996
+  zh: 77176470a032f07e
+/deepseek-ai-dsh-voice-edge/model-experience:
+  en: 86f8deace80f2001
+  zh: 5e042ad68624d8b1
+/deepseek-ai-dsh-voice-edge/model-experience/kv-cache-effect:
+  en: b65720c1bda0310f
+  zh: 7281781df69c9c35
+/deepseek-ai-dsh-voice-edge/known-limitations-and-deferred-work:
+  en: d26948ad279c67c6
+  zh: 647969276f96828b
+/deepseek-ai-dsh-voice-edge/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: e88aeb617ffb74ea

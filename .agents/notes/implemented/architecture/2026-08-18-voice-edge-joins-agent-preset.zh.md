@@ -10,7 +10,7 @@ voice-edge 桥接绑定的每个会话都通过 `ctx.agents.create` 创建 Harne
 
 ## Decision
 
-`createConversation` 以 [api-proxy](../../../../packages/host/apiproxy/src/api-proxy.ts) 为 web 会话组装 agent 的同一方式组装自己的 agent：`ctx.get('agentPresets')` 返回 roster 时，在创建**之前**解析配置的 preset（config `preset`，未设置时用 roster 默认），使 session header 能把 `meta.agentPreset` 快照进去；factory 的 `setup` 回调在未发布的 agent scope 上挂载它，于是损坏的 preset 让整个创建回滚为既有的 503 `agent_unavailable` 应答，而不是发布一个组装了一半的 agent。没有该服务时什么也不变——无 roster 的部署本就通过 host 层展示工具，这是 presets 出现之前的行为，在那里仍然正确。
+`createConversation` 以 web 会话控制器为 web 会话组装 agent 的同一方式组装自己的 agent：`ctx.get('agentPresets')` 返回 roster 时，在创建**之前**解析配置的 preset（config `preset`，未设置时用 roster 默认），使 session header 能把 `meta.agentPreset` 快照进去；factory 的 `setup` 回调在未发布的 agent scope 上挂载它，于是损坏的 preset 让整个创建回滚为既有的 503 `agent_unavailable` 应答，而不是发布一个组装了一半的 agent。没有该服务时什么也不变——无 roster 的部署本就通过 host 层展示工具，这是 presets 出现之前的行为，在那里仍然正确。
 
 与 api-proxy 的一个刻意差异：voice-edge 在重绑定时从不从日志重新解析 preset。会话的 agent 已存在时按原样采纳，不存在时按当前配置重建——与桥既有的 `cwd` 立场（请求/配置优先于持久化状态）一致，而非网关的会话连续性立场。voice-edge 会话是镜像，其历史不是在某个 preset 的工具集下产出的，连续性买不到任何东西。
 

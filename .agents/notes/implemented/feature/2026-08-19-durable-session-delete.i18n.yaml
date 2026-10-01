@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-durable-session-delete.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-durable-session-delete.md
-2026-08-19-durable-session-delete.md: b76bbdb1111ba9d4436ecd6dfbe69847b0b62f07
-2026-08-19-durable-session-delete.zh.md: aaf94554308726484bab1a76f3dd93e546557f5c
+/agent-note-durable-session-delete-across-the-persistence-registry-rpc-ui-chain:
+  en: a14c51b7df52b06f
+  zh: 419132c5b1cf3826
+/agent-note-durable-session-delete-across-the-persistence-registry-rpc-ui-chain/problem:
+  en: 4aeac9b3d9127caa
+  zh: d9c16265ef7ae561
+/agent-note-durable-session-delete-across-the-persistence-registry-rpc-ui-chain/decision:
+  en: 7eb675b5efd36616
+  zh: 15054d7c0ae6d06f
+/agent-note-durable-session-delete-across-the-persistence-registry-rpc-ui-chain/alternatives-considered:
+  en: 463e6a7f7b5cb7f0
+  zh: c92def05fbd08ade
+/agent-note-durable-session-delete-across-the-persistence-registry-rpc-ui-chain/consequences:
+  en: 4f6fcd65af83bf1c
+  zh: dc0a8ec71555f665

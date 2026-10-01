@@ -9,14 +9,20 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type {
-  ChatConversationViewNode, ChatSnapshot, ConversationEventInput,
-  ConversationNodeDefinition, ConversationViewDefinition,
-} from '@deepseek-ai/dsh-client-runtime/client'
-import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-runtime/client'
+  ChatConversationViewNode, ChatSnapshot,
+} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {
+  SessionLiveEventEntry,
+} from '@deepseek-ai/dsh-api-session-controller/client'
+import {
+  ConversationNodeAssembler,
+  type ConversationNodeDefinition,
+  type ConversationViewDefinition,
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type {} from '@deepseek-ai/dsh-voice-edge/types'
-import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-conversation/src/client/conversation-nodes/chat-snapshot-builder.ts'
+import { chatViewDefinition } from '@deepseek-ai/dsh-client-ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts'
 import {
   voiceEdgeAssistantDefinition, voiceEdgeToolDefinition, voiceEdgeUserDefinition,
 } from '../src/client/definitions.ts'
@@ -47,15 +53,16 @@ class TestViewDefinitions {
   }
 }
 
-function entry(seq: number, type: string, data: unknown): ConversationEventInput {
+function entry(seq: number, type: string, data: unknown): SessionLiveEventEntry {
   return {
-    event: { seq, time: 1_700_000_000_000 + seq, type, data } as ConversationEventInput['event'],
-    view: undefined,
+    type: 'event',
+    event: { seq, time: 1_700_000_000_000 + seq, type, data } as SessionLiveEventEntry['event'],
   }
 }
 
-function snapshot(entries: readonly ConversationEventInput[], hasMore = false): ChatSnapshot {
+function snapshot(entries: readonly SessionLiveEventEntry[], hasMore = false): ChatSnapshot {
   const assembler = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
+  assembler.activateTarget('chat')
   assembler.replaceWindow(entries, hasMore)
   assembler.flush()
   const value = assembler.snapshot('chat') as ChatSnapshot | undefined
@@ -68,7 +75,7 @@ function nodesOf(value: ChatSnapshot, kind: string): ChatConversationViewNode[] 
 }
 
 /** One full mirrored turn: sync, tool-calling step, tool pair, final step, finish. */
-function mirrorTurn(): ConversationEventInput[] {
+function mirrorTurn(): SessionLiveEventEntry[] {
   return [
     entry(1, 'voice-edge/sync', {
       requestId: 'r1',
@@ -136,6 +143,7 @@ describe('voice-edge mirror conversation nodes', () => {
 
   it('settles a running tool row through the live append path', () => {
     const assembler = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
+    assembler.activateTarget('chat')
     assembler.replaceWindow([
       entry(1, 'voice-edge/tool-call', {
         callId: 'call-9', name: 'read_file', arguments: { path: '/tmp/a' },

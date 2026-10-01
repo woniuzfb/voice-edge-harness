@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-voice-edge-restart-resumes-mirrored-session.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-19-voice-edge-restart-resumes-mirrored-session.md
-2026-08-19-voice-edge-restart-resumes-mirrored-session.md: a9bcea8eec56bd14ba6b02e1e0bc23157d309c1d
-2026-08-19-voice-edge-restart-resumes-mirrored-session.zh.md: 9ef00833972da7682c53bb8b5cced8518b6a4632
+/agent-note-voice-edge-restart-resumes-the-mirrored-session:
+  en: 99937acd8496985e
+  zh: 036025735e6dbbe9
+/agent-note-voice-edge-restart-resumes-the-mirrored-session/problem:
+  en: 282b4476aab52cf3
+  zh: df3174b954374f59
+/agent-note-voice-edge-restart-resumes-the-mirrored-session/decision:
+  en: 7c9ffd2420d80440
+  zh: 17d2219aa4f3ff6b
+/agent-note-voice-edge-restart-resumes-the-mirrored-session/alternatives-considered:
+  en: 2b124600b636fbd6
+  zh: 5aee00e43393456f
+/agent-note-voice-edge-restart-resumes-the-mirrored-session/consequences:
+  en: 8e5ed12341a79add
+  zh: fd1f2aca4565e38a

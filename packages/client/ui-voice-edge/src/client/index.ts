@@ -4,12 +4,12 @@
  * renderers. The Host bridge owns the event log; this package owns only how
  * the mirror reads in the Chat view.
  */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-// Type-only: pulls the ui-conversation ChatNodeDataMap / slot merges.
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-// Type-only: pulls the locale plugin's Context merge (ctx.locale).
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
-// Type-only edge: the `voice-edge/*` SessionEventMap merge (producer-owned).
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-voice-edge/types'
 import {
   voiceEdgeAssistantDefinition, voiceEdgeToolDefinition, voiceEdgeUserDefinition,
@@ -41,16 +41,16 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 const NS = 'voiceEdge'
 
 /** Required services for the mirror Definitions, keyed renderers, and copy. */
-export const inject = ['conversationEvents', 'slots', 'locale']
+export const inject = ['uiConversation', 'slots', 'locale']
 
 /**
  * Client plugin body: the three mirror Definitions and their Chat renderers.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  ctx.conversationEvents.register(voiceEdgeUserDefinition)
-  ctx.conversationEvents.register(voiceEdgeAssistantDefinition)
-  ctx.conversationEvents.register(voiceEdgeToolDefinition)
+  ctx.uiConversation.events.register(voiceEdgeUserDefinition)
+  ctx.uiConversation.events.register(voiceEdgeAssistantDefinition)
+  ctx.uiConversation.events.register(voiceEdgeToolDefinition)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-voice-edge: dictionaries')
 
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({

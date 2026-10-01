@@ -6,7 +6,7 @@ English | [中文](2026-08-19-durable-session-delete.zh.md)
 
 ## Problem
 
-Archive ([session archive](2026-07-31-session-archive-global-set.md)) only hides a session: the durable log stays on disk forever and no product surface can remove it. Reclaiming disk or eliminating a transcript meant hand-deleting directories under the sessions root outside the product, and a hand-deleted session leaves stale registry state behind — archive-set membership and workspace accounting slots — that the next restart still sees. The session row menu carried no destructive entry at all; the original archive decision had consumed the visual-only "Delete session" placeholder for its non-destructive action.
+Archive ([session archive](../../archived/feature/2026-07-31-session-archive-global-set.md)) only hides a session: the durable log stays on disk forever and no product surface can remove it. Reclaiming disk or eliminating a transcript meant hand-deleting directories under the sessions root outside the product, and a hand-deleted session leaves stale registry state behind — archive-set membership and workspace accounting slots — that the next restart still sees. The session row menu carried no destructive entry at all; the original archive decision had consumed the visual-only "Delete session" placeholder for its non-destructive action.
 
 ## Decision
 

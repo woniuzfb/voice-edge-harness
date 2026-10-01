@@ -14,14 +14,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import type { Session } from '@deepseek-ai/dsh-session'
-import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
+import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionSeedEventState } from '@deepseek-ai/dsh-session'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, AgentSetup } from '@deepseek-ai/dsh-agent'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
 import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import * as VoiceEdge from '../src/index.ts'
 
 const TOKEN = 'test-secret'
@@ -133,13 +134,18 @@ async function boot(options: { roster?: boolean; preset?: string; persist?: stri
   }
 
   /** Build one minimal Agent on a live session, run setup, register, and return the handle. */
-  async function publishAgent(session: Session, detachSession: () => void, setup: AgentSetup | undefined): Promise<AgentHandle> {
+  async function publishAgent(
+    session: Session,
+    detachSession: () => void,
+    setup: AgentSetup | undefined,
+    writeHandle?: SessionHandle,
+  ): Promise<AgentHandle> {
     const scope = ctx.plugin(() => {})
     const agent: Agent = {
       id: session.id,
       options: {},
       session,
-      inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+      inbox: { nextTurn: [], nextStep: [] } as never,
       status: 'idle',
       ctx: scope.ctx,
       followup: () => {},
@@ -152,16 +158,16 @@ async function boot(options: { roster?: boolean; preset?: string; persist?: stri
     }
     // The unpublished-setup contract the real factory runs: setup composes
     // the scoped world before registration, so its throw rolls creation back.
-    await setup?.(agent.ctx)
+    await setup?.(agent.ctx, agent)
     const unregister = ctx.agents.register(agent)
     return {
       agent,
       // Mirror the real handle contract: disposal removes the agent AND its
       // session, emitting session/disposed for bridge-side cleanup listeners.
-      dispose: () => {
-        unregister()
+      dispose: async () => {
+        await unregister()
         detachSession()
-        return Promise.resolve()
+        await writeHandle?.close()
       },
     }
   }
@@ -183,22 +189,36 @@ async function boot(options: { roster?: boolean; preset?: string; persist?: stri
           ...options.meta?.agentPreset === undefined ? {} : { agentPreset: options.meta.agentPreset },
         },
       })
-      return publishAgent(session, enterSession(session), options.setup)
+      const persistence = ctx.get('sessionPersistence')
+      const writeHandle = persistence !== undefined ? await persistence.create(session.header) : undefined
+      return publishAgent(session, enterSession(session), options.setup, writeHandle)
     },
     async resume(_ownerCtx, options) {
-      // The real factory reconstructs through persistence.prepare(); the stub
+      // The real factory reconstructs through persistence.open(); the stub
       // replays the loaded log as a creation seed — same published shape.
       const persistence = ctx.get('sessionPersistence')
       if (persistence === undefined) throw new Error('stub factory resume requires a persistence backend')
-      const loaded = await persistence.load(options.resumeSessionId)
+      const writeHandle = await persistence.open(options.resumeSessionId, 'write')
+      let loadedEvents: readonly SessionEvent[]
+      let eventState: SessionSeedEventState
+      const header = writeHandle.header
+      try {
+        const result = await writeHandle.read()
+        loadedEvents = result.events
+        eventState = result.eventState
+      } catch (error) {
+        await writeHandle.close()
+        throw error
+      }
       const session = ctx.sessions.prepare(options.resumeSessionId, {
-        seed: loaded.events,
-        meta: {
-          ...loaded.meta.cwd === undefined ? {} : { cwd: loaded.meta.cwd },
-          ...loaded.meta.agentPreset === undefined ? {} : { agentPreset: loaded.meta.agentPreset },
-        },
+        seed: [...loadedEvents],
+        eventState,
+        meta: structuredClone(header),
+        inheritedEventCount: writeHandle.inheritedEventCount,
       })
-      return publishAgent(session, enterSession(session), options.setup)
+      const suffix = session.snapshotEvents(SessionLogOffset(loadedEvents.length))
+      if (suffix.length > 0) await writeHandle.append(suffix)
+      return publishAgent(session, enterSession(session), options.setup, writeHandle)
     },
   })
 
@@ -271,11 +291,11 @@ describe('voice-edge bridge over a real Loader composition', () => {
     expect(tools.map(tool => tool.name)).toContain('ve_echo')
     // Bind is content-free: only the placeholder title stands until the
     // client delivers a mirror event.
-    const events = sessionOf(ctx, 'conv-1').events
+    const events = sessionOf(ctx, 'conv-1').snapshotEvents()
     expect(events).toHaveLength(1)
     const title = events.filter(event => event.type === 'session/title')
     expect(title[0]?.data.title).toBe('voice-edge')
-    expect(title[0]?.data.source).toEqual({ kind: 'fallback' })
+    expect(title[0]?.data.source).toEqual({ kind: 'user' })
 
     const mirrored = await post(ctx, '/event', {
       conversation_key: 'conv-1',
@@ -286,7 +306,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
       messages: [{ role: 'user', text: 'hello, this is the final prompt' }],
     })
     expect(mirrored.status).toBe(200)
-    const syncEvent = sessionOf(ctx, 'conv-1').events.find(event => event.type === 'voice-edge/sync')
+    const syncEvent = sessionOf(ctx, 'conv-1').snapshotEvents().find(event => event.type === 'voice-edge/sync')
     expect(syncEvent?.data.model).toBe('LLM:m365-claude-opus')
     expect(syncEvent?.data.messageCount).toBe(1)
     expect(syncEvent?.data.messages[0]?.text).toBe('hello, this is the final prompt')
@@ -331,7 +351,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
       finish_reason: 'tool_calls',
     })
     expect(mirrored.status).toBe(200)
-    const event = sessionOf(ctx, 'conv-2').events.find(e => e.type === 'voice-edge/model-event')
+    const event = sessionOf(ctx, 'conv-2').snapshotEvents().find(e => e.type === 'voice-edge/model-event')
     expect(event?.data.kind).toBe('step')
     expect(event?.data.text).toBe('assistant text')
     expect(event?.data.toolCalls).toHaveLength(1)
@@ -354,7 +374,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
     expect(result.isError).toBe(false)
     expect(result.text).toBe('echo: hello harness')
 
-    const events = sessionOf(ctx, 'conv-3').events
+    const events = sessionOf(ctx, 'conv-3').snapshotEvents()
     const call = events.find(event => event.type === 'voice-edge/tool-call')
     const outcome = events.find(event => event.type === 'voice-edge/tool-result')
     expect(call?.data.callId).toBe('call-1')
@@ -376,7 +396,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
     // No persistence backend in this composition: the checkpoint ran, but no
     // durability listener participated.
     expect(finished.payload['flushed']).toBe(false)
-    const event = sessionOf(ctx, 'conv-4').events.find(e => e.type === 'voice-edge/finish')
+    const event = sessionOf(ctx, 'conv-4').snapshotEvents().find(e => e.type === 'voice-edge/finish')
     expect(event?.data.sequence).toBe(7)
     expect(event?.data.status).toBe('completed')
   }, 30_000)
@@ -457,7 +477,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
     expect(finish.status).toBe(200)
     expect(finish.payload['flushed']).toBe(true)
     const adopted = ctx.sessions.get(SessionId(String(second.payload['harness_session_id'])))
-    expect(adopted?.events.filter(event => event.type === 'voice-edge/sync')).toHaveLength(2)
+    expect(adopted?.snapshotEvents().filter(event => event.type === 'voice-edge/sync')).toHaveLength(2)
   }, 60_000)
 
   it('re-attaches a live agent another host entry resumed on the mirrored session (no 503)', async () => {
@@ -520,7 +540,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
     // session as dead rather than still-live.
     expect(await ctx.agents.dispose(sessionId)).toBe(true)
     await ctx.sessionPersistence.list()
-    await ctx.sessionPersistence.delete(sessionId)
+    await ctx.sessionPersistence.delete?.(sessionId)
     expect(ctx.sessions.get(sessionId)).toBeUndefined()
     expect(ctx.agents.get(sessionId)).toBeUndefined()
 
@@ -530,7 +550,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
     const rebound = await post(ctx, '/session/bind', { conversation_key: 'boot-D', boot_key: 'boot-D', model: 'm' })
     expect(rebound.status).toBe(200)
     expect(rebound.payload['harness_session_id']).toBe(String(sessionId))
-    const events = ctx.sessions.get(sessionId)?.events ?? []
+    const events = ctx.sessions.get(sessionId)?.snapshotEvents() ?? []
     expect(events.filter(event => event.type === 'voice-edge/sync')).toHaveLength(0)
     expect(events.filter(event => event.type === 'session/title')).toHaveLength(1)
   }, 60_000)
@@ -577,7 +597,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
     })
     await post(ctx, '/event', { conversation_key: 'conv-title', type: 'voice-edge/finish' })
 
-    const events = sessionOf(ctx, 'conv-title').events
+    const events = sessionOf(ctx, 'conv-title').snapshotEvents()
     // The title turn mirrored nothing: still exactly the ordinary turn's events.
     expect(events.filter(event => event.type === 'voice-edge/sync')).toHaveLength(1)
     expect(events.filter(event => event.type === 'voice-edge/model-event')).toHaveLength(1)
@@ -586,7 +606,7 @@ describe('voice-edge bridge over a real Loader composition', () => {
     const titles = events.filter(event => event.type === 'session/title')
     expect(titles).toHaveLength(2)
     expect(titles.at(-1)?.data.title).toBe('Bug Fixing Help')
-    expect(titles.at(-1)?.data.source).toEqual({ kind: 'provider', provider: 'voice-edge' })
+    expect(titles.at(-1)?.data.source).toEqual({ kind: 'user' })
   }, 30_000)
 
   it('a standing title skips detection: the generate-title turn mirrors as ordinary content', async () => {
@@ -612,11 +632,11 @@ describe('voice-edge bridge over a real Loader composition', () => {
     })
     await post(ctx, '/event', { conversation_key: 'conv-pin', type: 'voice-edge/finish' })
     const session = sessionOf(ctx, 'conv-pin')
-    const titles = session.events.filter(event => event.type === 'session/title')
+    const titles = session.snapshotEvents().filter(event => event.type === 'session/title')
     expect(titles.at(-1)?.data.title).toBe('User Named This')
     // With a standing title the turn is not folded: it mirrors normally.
-    expect(session.events.filter(event => event.type === 'voice-edge/sync')).toHaveLength(1)
-    expect(session.events.filter(event => event.type === 'voice-edge/model-event')).toHaveLength(1)
+    expect(session.snapshotEvents().filter(event => event.type === 'voice-edge/sync')).toHaveLength(1)
+    expect(session.snapshotEvents().filter(event => event.type === 'voice-edge/model-event')).toHaveLength(1)
   }, 30_000)
 
   it('keeps an earlier generated title across a second generate-title turn', async () => {
@@ -638,10 +658,10 @@ describe('voice-edge bridge over a real Loader composition', () => {
       await post(ctx, '/event', { conversation_key: 'conv-regen', type: 'voice-edge/finish' })
     }
     const session = sessionOf(ctx, 'conv-regen')
-    const titles = session.events.filter(event => event.type === 'session/title')
+    const titles = session.snapshotEvents().filter(event => event.type === 'session/title')
     expect(titles.at(-1)?.data.title).toBe('First Title')
     // The first turn folded (placeholder replaced); once the title stood the
     // second turn mirrored as ordinary content.
-    expect(session.events.filter(event => event.type === 'voice-edge/sync')).toHaveLength(1)
+    expect(session.snapshotEvents().filter(event => event.type === 'voice-edge/sync')).toHaveLength(1)
   }, 30_000)
 })

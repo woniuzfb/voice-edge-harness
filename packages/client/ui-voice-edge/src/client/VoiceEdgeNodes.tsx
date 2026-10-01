@@ -3,17 +3,23 @@
  * `node.data` and the locale face — no Session window or snapshot scanning.
  */
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  dataImageSrc, IconCheckOutline16, IconChevronDownOutline14, IconChevronUpOutline14,
-  IconCopyOutline16, MarkdownText, MessageText, Tooltip, writeClipboard,
+  dataImageSrc, IconCheckOutlineRegular, IconChevronDownOutlineRegular, IconChevronUpOutlineRegular,
+  IconCopyOutlineRegular, MarkdownText, Tooltip, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {
   VoiceEdgeAssistantNode, VoiceEdgeToolNode, VoiceEdgeUserNode,
 } from './definitions.ts'
 import css from './VoiceEdgeNodes.module.css'
+
+function MessageText({ text }: { text: string }) {
+  return <div className={css.text}>{text}</div>
+}
 
 /**
  * Copy action for a mirrored bubble. The success chrome reuses the
@@ -54,7 +60,7 @@ function CopyAction({ text, t }: { text: string; t: PropsLocale<'voiceEdge'>['t'
         aria-label={copied ? t('copied') : t('copy')}
         onClick={onCopy}
       >
-        {copied ? <IconCheckOutline16 /> : <IconCopyOutline16 />}
+        {copied ? <IconCheckOutlineRegular /> : <IconCopyOutlineRegular />}
       </button>
     </Tooltip>
   )
@@ -89,7 +95,7 @@ function UserNavAction({ direction, t }: {
         aria-label={label}
         onClick={(event) => { scrollToUserMessage(event.currentTarget, direction) }}
       >
-        {direction < 0 ? <IconChevronUpOutline14 /> : <IconChevronDownOutline14 />}
+        {direction < 0 ? <IconChevronUpOutlineRegular /> : <IconChevronDownOutlineRegular />}
       </button>
     </Tooltip>
   )
@@ -174,6 +180,18 @@ export const VoiceEdgeAssistantView = memo(function VoiceEdgeAssistantView({
   node, t,
 }: PropsRuntime<'conversation.chat.node', 'voice-edge-assistant'> & PropsLocale<'voiceEdge'>) {
   const data: VoiceEdgeAssistantNode = node.data
+  const markdownLabels = useMemo<MarkdownLabels>(() => ({
+    code: {
+      copyLabel: t('copy'),
+      copiedLabel: t('copied'),
+      toolbarLabels: {
+        codeLabel: 'Code',
+        wrapLabel: 'Wrap',
+        unwrapLabel: 'Unwrap',
+      },
+    },
+    footnotes: 'Footnotes',
+  }), [t])
   return (
     <div className={css.assistantRow} role="group" aria-label={t('assistant.aria')}>
       {data.reasoning !== '' && (
@@ -184,7 +202,7 @@ export const VoiceEdgeAssistantView = memo(function VoiceEdgeAssistantView({
       )}
       {data.text !== '' && (
         <div className={css.assistantText}>
-          <MarkdownText text={data.text} />
+          <MarkdownText text={data.text} labels={markdownLabels} />
         </div>
       )}
       {data.text !== '' && (

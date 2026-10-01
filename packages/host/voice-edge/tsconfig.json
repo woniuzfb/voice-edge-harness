@@ -30,7 +30,7 @@
       "path": "../../core/tools"
     },
     {
-      "path": "../../preset/agent-presets"
+      "path": "../../preset/agent-preset"
     },
     {
       "path": "../../llm/llm"

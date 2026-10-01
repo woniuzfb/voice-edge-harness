@@ -20,7 +20,7 @@ A generated title replaces only the placeholder: once a real title stands — an
 
 **Have voice_edge.py skip mirroring title requests.** Rejected: the client owns the mirror, but the bridge owns the session surface (placeholder title, rename protection); splitting one feature across the wire protocol and the plugin would need a new "this turn is special" event type for what the instruction text already states.
 
-**Reuse the title service's `rename()`.** Rejected: `rename` writes the `user` source, which pins — the model's reply is not a user decision, and pinning would block nothing today but misstate provenance to every future title consumer.
+**Reuse the title service's `rename()`.** Rejected: `rename` writes the `user` source, which pins — the model's reply is not a user decision, and pinning would block nothing today but misstate the source to every future title consumer.
 
 ## Consequences
 

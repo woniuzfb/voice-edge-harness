@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-19-voice-edge-folds-continue-generate-title.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-voice-edge-folds-continue-generate-title.md
-2026-08-19-voice-edge-folds-continue-generate-title.md: fdbc1fb9d32ceb3b68357cd0a5c9bb644cbbe09e
-2026-08-19-voice-edge-folds-continue-generate-title.zh.md: a7594ab2fab00bc61cffa282fe71b8b3be48b1a6
+/agent-note-voice-edge-folds-continue-s-generatetitle-turn-into-session-title:
+  en: ec0d375f338444f0
+  zh: 12f9324c3e79046f
+/agent-note-voice-edge-folds-continue-s-generatetitle-turn-into-session-title/problem:
+  en: e2ed5a623173e3d6
+  zh: 6b8afdf5545dddf2
+/agent-note-voice-edge-folds-continue-s-generatetitle-turn-into-session-title/decision:
+  en: d6510f6f2e7292a1
+  zh: f4d60a54751da6e7
+/agent-note-voice-edge-folds-continue-s-generatetitle-turn-into-session-title/alternatives-considered:
+  en: 086f617bd08991b0
+  zh: 8bece636fb9cd895
+/agent-note-voice-edge-folds-continue-s-generatetitle-turn-into-session-title/consequences:
+  en: 460d62df5e73842f
+  zh: 76227864ff083745

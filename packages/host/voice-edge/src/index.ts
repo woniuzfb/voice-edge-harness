@@ -23,16 +23,16 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, ToolSchema } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
-import { normalizeSessionTitle, SessionTitleProviderId } from '@deepseek-ai/dsh-session-title'
+import { normalizeSessionTitle } from '@deepseek-ai/dsh-session-title'
 import type { Agent, AgentHandle } from '@deepseek-ai/dsh-agent'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 // Type-only edges: resolve the `webServer` and `agentPresets` Context service
 // merges and the `approval/request` Events merge this plugin consumes.
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-session-persistence'
 import type {} from '@deepseek-ai/dsh-tools'
@@ -150,9 +150,9 @@ function isTitleGenerationPrompt(text: string): boolean {
  * keeps it.
  */
 function generatedTitleApplies(session: Session): boolean {
-  const latest = session.events.findLast(event => event.type === 'session/title')
-  return latest === undefined
-    || (latest.data.source.kind !== 'user' && latest.data.title === DEFAULT_TITLE)
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
+  const latest = session.snapshotEvents().findLast(event => event.type === 'session/title')
+  return latest === undefined || latest.data.title === DEFAULT_TITLE
 }
 
 /** Flatten result content blocks into model-facing text for the wire. */
@@ -315,8 +315,8 @@ export function apply(ctx: Context, config: Config): void {
     let resumeSessionId: SessionId | undefined
     const persistence = ctx.get('sessionPersistence')
     if (persistence !== undefined) {
-      const headers = await persistence.list()
-      resumeSessionId = candidates.find(id => headers.some(header => header.id === id))
+      const snapshots = await persistence.list()
+      resumeSessionId = candidates.find(id => snapshots.some(snapshot => snapshot.header.id === id))
     }
     let handle: AgentHandle
     try {
@@ -353,11 +353,12 @@ export function apply(ctx: Context, config: Config): void {
     // and adopted pre-title sessions gain it on resume — because the client's
     // untitled display falls back to the cwd basename, which names the
     // Harness checkout rather than this conversation surface.
-    if (!handle.agent.session.events.some(event => event.type === 'session/title')) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
+    if (!handle.agent.session.snapshotEvents().some(event => event.type === 'session/title')) {
       handle.agent.session.append('session/title', {
         title: DEFAULT_TITLE,
         messageSeqs: [],
-        source: { kind: 'fallback' },
+        source: { kind: 'user' },
       })
     }
     return {
@@ -488,7 +489,7 @@ export function apply(ctx: Context, config: Config): void {
             convo.agent.session.append('session/title', {
               title,
               messageSeqs: [],
-              source: { kind: 'provider', provider: SessionTitleProviderId('voice-edge') },
+              source: { kind: 'user' },
             })
           }
         }
@@ -532,7 +533,7 @@ export function apply(ctx: Context, config: Config): void {
     })
     const started = Date.now()
     const result = await ctx.tools.execute({
-      callId: CallId(callId),
+      callId: ToolCallId(callId),
       name: toolName,
       arguments: request.arguments ?? {},
       agent: convo.agent,
