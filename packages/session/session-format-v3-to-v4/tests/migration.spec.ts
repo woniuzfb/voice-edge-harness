@@ -217,4 +217,54 @@ describe('V3 to V4 source preservation', () => {
     }
     expect(() => reader.finish()).toThrow('wrong Session')
   })
+
+  it('migrates voice-edge events without refusal', () => {
+    const rows: SessionFormatEvent[] = [
+      { type: 'voice-edge/sync', seq: 0, time: 1, data: { requestId: 'req-1', messageCount: 1, messages: [] } },
+      { type: 'voice-edge/model-event', seq: 1, time: 2, data: { sequence: 1, kind: 'step' } },
+      { type: 'voice-edge/tool-call', seq: 2, time: 3, data: { sequence: 2, tool: 'bash', callId: 'call-1', arguments: {} } },
+      { type: 'voice-edge/tool-result', seq: 3, time: 4, data: { sequence: 3, tool: 'bash', callId: 'call-1', result: {} } },
+      { type: 'voice-edge/finish', seq: 4, time: 5, data: { sequence: 4, status: 'completed' } },
+    ]
+    const migrated = migrate(rows)
+    expect(migrated.events).toHaveLength(5)
+    expect(migrated.events.map(e => e.type)).toEqual([
+      'voice-edge/sync',
+      'voice-edge/model-event',
+      'voice-edge/tool-call',
+      'voice-edge/tool-result',
+      'voice-edge/finish',
+    ])
+  })
+
+  it('normalizes historical fallback and provider titles with empty messageSeqs to user source', () => {
+    const rows: SessionFormatEvent[] = [
+      { type: 'session/title', seq: 0, time: 1, data: { title: 'voice-edge', messageSeqs: [], source: { kind: 'fallback' } } },
+      { type: 'session/title', seq: 1, time: 2, data: { title: 'custom', messageSeqs: [], source: { kind: 'provider', provider: 'voice-edge' } } },
+      { type: 'session/title', seq: 2, time: 3, data: { title: 'already-user', messageSeqs: [], source: { kind: 'user' } } },
+      { type: 'user/message', seq: 3, time: 4, data: { source: { kind: 'user' }, role: 'user', content: [] } },
+      { type: 'session/title', seq: 4, time: 5, data: { title: 'cited', messageSeqs: [3], source: { kind: 'fallback' } } },
+    ]
+    const migrated = migrate(rows)
+    expect(migrated.events[0]?.data).toEqual({
+      title: 'voice-edge',
+      messageSeqs: [],
+      source: { kind: 'user' },
+    })
+    expect(migrated.events[1]?.data).toEqual({
+      title: 'custom',
+      messageSeqs: [],
+      source: { kind: 'user' },
+    })
+    expect(migrated.events[2]?.data).toEqual({
+      title: 'already-user',
+      messageSeqs: [],
+      source: { kind: 'user' },
+    })
+    expect(migrated.events[4]?.data).toEqual({
+      title: 'cited',
+      messageSeqs: [3],
+      source: { kind: 'fallback' },
+    })
+  })
 })

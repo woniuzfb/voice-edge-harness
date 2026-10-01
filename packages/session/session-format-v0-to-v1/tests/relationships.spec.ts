@@ -388,12 +388,18 @@ describe('released v1 whole-artifact relationships', () => {
   })
 
   it('validates versioned subagent descriptors by source/current policy', () => {
+    const v2 = {
+      type: 'subagent/descriptor', seq: 0, time: 1,
+      data: { version: 2, mode: 'continuable', provider: 'spawn', label: 'task' },
+    }
+    const v0Header = { ...header, version: 0 }
+    expect(restoreV0ToV1(v0Header, [v2]).events).toEqual([v2])
+
     const future = {
       type: 'subagent/descriptor', seq: 0, time: 1,
       data: { version: 4, future: true },
     }
     expect(decode([future]).events).toEqual([future])
-    const v0Header = { ...header, version: 0 }
     expect(() => restoreV0ToV1(v0Header, [future]))
       .toThrow(SessionFormatUnsupportedMigrationError)
   })

@@ -107,7 +107,7 @@ class ReleasedV3ToV4Stage implements SessionFormatMigrationStage {
       const converted = rewriteV3MessageSource(source, event.seq, message['role'])
       return converted === source ? message : { ...message, source: converted }
     })
-    context.emitEvent(migrateV3EventContent(liftToolResult(rewritten)))
+    context.emitEvent(normalizeV3TitleEvent(migrateV3EventContent(liftToolResult(rewritten))))
   }
 
   transformRun(run: SessionFormatEventRun, context: SessionFormatMigrationContext): void {
@@ -172,4 +172,21 @@ class ReleasedV3ToV4Stage implements SessionFormatMigrationStage {
     }
     return cut
   }
+}
+
+/**
+ * Normalize released V3 session/title events so that empty messageSeqs pairs with user source.
+ * @param event - transformed event before emission.
+ * @returns the event with source kind normalized to user when messageSeqs is empty, or the unchanged event.
+ */
+function normalizeV3TitleEvent(event: SessionFormatEvent): SessionFormatEvent {
+  if (event.type !== 'session/title') return event
+  const data = event.data as SessionFormatJsonObject
+  const messageSeqs = data['messageSeqs']
+  const source = data['source']
+  if (Array.isArray(messageSeqs) && messageSeqs.length === 0
+    && isSessionFormatJsonObject(source) && source['kind'] !== 'user') {
+    return { ...event, data: { ...data, source: { kind: 'user' } } }
+  }
+  return event
 }
