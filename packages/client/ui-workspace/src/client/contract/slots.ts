@@ -410,6 +410,39 @@ export interface SessionRenameDialogInjected {
   renameSession: (sessionId: SessionId, title: string) => Promise<void>
 }
 
+/** Delete action share: the row only raises the request; the dialog entry answers it. */
+export interface DeleteSessionInjected {
+  /** Ask for the delete dialog, seeded with the row's current title. */
+  requestSessionDelete: (sessionId: SessionId, currentTitle: string) => void
+}
+
+/** A Session deletion the delete action asked for; the dialog entry opens on it. */
+export interface SessionDeleteTarget {
+  /** Session to delete. */
+  sessionId: SessionId
+  /** Title the dialog names in the warning description. */
+  displayTitle: string
+}
+
+/** Delete dialog share: the pending request, its settlement, and the delete hop the dialog confirms with. */
+export interface SessionDeleteDialogInjected {
+  hooks: {
+    /** The delete asked for, until the dialog consumes or cancels it. */
+    deleteRequest: HostObservable<SessionDeleteTarget | null>
+  }
+  /** Consume or cancel the pending request. */
+  settleSessionDelete: () => void
+  /** Delete a Session durably; resolves on host acceptance. */
+  deleteSession: (sessionId: SessionId) => Promise<void>
+}
+
+/** Props of the delete dialog entry in `shell.overlay`. */
+export type SessionDeleteDialogProps =
+  PropsRuntime<'shell.overlay'>
+  & PropsLocale<'workspace'>
+  & Omit<SessionDeleteDialogInjected, 'hooks'>
+  & PropsHooks<SessionDeleteDialogInjected['hooks']>
+
 /** Row toast share: the notice on display, its dismissal, and the two actions the archived notice offers. */
 export interface RowToastInjected {
   hooks: {

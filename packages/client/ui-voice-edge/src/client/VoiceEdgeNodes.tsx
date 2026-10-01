@@ -185,12 +185,12 @@ export const VoiceEdgeAssistantView = memo(function VoiceEdgeAssistantView({
       copyLabel: t('copy'),
       copiedLabel: t('copied'),
       toolbarLabels: {
-        codeLabel: 'Code',
-        wrapLabel: 'Wrap',
-        unwrapLabel: 'Unwrap',
+        codeLabel: t('codeBlock.title'),
+        wrapLabel: t('codeBlock.wrap'),
+        unwrapLabel: t('codeBlock.unwrap'),
       },
     },
-    footnotes: 'Footnotes',
+    footnotes: t('markdown.footnotes'),
   }), [t])
   return (
     <div className={css.assistantRow} role="group" aria-label={t('assistant.aria')}>

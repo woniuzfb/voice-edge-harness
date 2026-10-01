@@ -13,6 +13,8 @@ import type {
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
+  WorkspaceDeleteSessionRequest,
+  WorkspaceDeleteSessionValue,
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
   WorkspaceId,
@@ -99,6 +101,7 @@ export const workspaceWorld: RemoteTable = {
       workspace: workspace(String(request.workspaceId), { title: request.title }),
     }),
     'workspace/delete': (_request: WorkspaceDeleteRequest): RemoteResult<WorkspaceDeleteValue> => ok({ deleted: true }),
+    'workspace/deleteSession': (_request: WorkspaceDeleteSessionRequest): RemoteResult<WorkspaceDeleteSessionValue> => ok({ deleted: true }),
     'workspace/insertBefore': (request: WorkspaceInsertBeforeRequest): RemoteResult<WorkspaceOrderValue> => ok({ workspaceIds: [request.workspaceId] }),
     'workspace/insertSessionBefore': (request: WorkspaceInsertSessionBeforeRequest): RemoteResult<WorkspaceValue> => ok({
       workspace: workspace(String(request.workspaceId), { sessionIds: [request.sessionId] }),

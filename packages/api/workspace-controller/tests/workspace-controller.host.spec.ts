@@ -50,7 +50,11 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve }
 }
 
-async function harness(options: { systemDocuments?: boolean } = {}) {
+async function harness(options: {
+  systemDocuments?: boolean
+  sessionPersistence?: ((root: string) => { list: () => Promise<readonly unknown[]>; delete?: (id: SessionId) => Promise<void> })
+    | { list: () => Promise<readonly unknown[]>; delete?: (id: SessionId) => Promise<void> }
+} = {}) {
   const root = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-workspace-controller-')))
   tempDirs.push(root)
   const ctx = new Context()
@@ -61,7 +65,10 @@ async function harness(options: { systemDocuments?: boolean } = {}) {
   const storageDomain = new DomainFacility(ctx, { backend: 'memory', routes: {} })
   ctx.storage.mount('domain', storageDomain)
   ctx.provide('storageDomain', storageDomain)
-  ctx.provide('sessionPersistence', { list: () => Promise.resolve([]) } as never)
+  const persistence = typeof options.sessionPersistence === 'function'
+    ? options.sessionPersistence(root)
+    : (options.sessionPersistence ?? { list: () => Promise.resolve([]) })
+  ctx.provide('sessionPersistence', persistence as never)
   await ctx.plugin(WorkspaceRegistry)
   const dispose = (): void => {}
   ctx.provide('typert', {
@@ -299,6 +306,46 @@ describe('WorkspaceController commands', () => {
     // Unpin is idempotent: an id that is not pinned is not an error.
     await expect(controller.unpinSession({ sessionId: session.id }))
       .resolves.toEqual({ pinnedSessionIds: [] })
+  })
+
+  it('permanently deletes a Session and clears its references', async () => {
+    const sessionId = SessionId('to-delete')
+    const deletedSessions: SessionId[] = []
+    const { controller, ctx, root } = await harness({
+      sessionPersistence: root => ({
+        list: () => Promise.resolve([{
+          header: {
+            id: sessionId,
+            version: 1,
+            formatVersion: 4,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            cwd: stageDir(root, 'del-session'),
+            isSeeded: false,
+          },
+          revision: 'rev1',
+        }]),
+        delete: (id: SessionId) => { deletedSessions.push(id); return Promise.resolve() },
+      }),
+    })
+    const created = await controller.create({ path: stageDir(root, 'del-session') })
+    const ws = ctx.workspaceRegistry.get(created.workspace.workspaceId)
+    await ws?.attachSession(sessionId)
+    await controller.pinSession({ sessionId })
+
+    await expect(controller.deleteSession({ sessionId }))
+      .resolves.toEqual({ deleted: true })
+
+    expect(deletedSessions).toContain(sessionId)
+    const updated = ctx.workspaceRegistry.get(created.workspace.workspaceId)
+    expect(updated?.sessionIds).toEqual([])
+    expect(ctx.workspaceRegistry.pinnedSessionIds).toEqual([])
+
+    // A bare live session without a disposable agent handle rejects
+    const liveSession = ctx.sessions.create(SessionId('bare-live'), {
+      meta: { cwd: created.workspace.path },
+    })
+    await expect(controller.deleteSession({ sessionId: liveSession.id }))
+      .rejects.toMatchObject({ code: 'workspace/session-live' })
   })
 })
 

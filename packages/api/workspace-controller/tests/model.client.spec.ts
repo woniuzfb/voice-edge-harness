@@ -8,6 +8,8 @@ import type {
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
+  WorkspaceDeleteSessionRequest,
+  WorkspaceDeleteSessionValue,
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
   WorkspaceInsertBeforeRequest,
@@ -77,6 +79,8 @@ class FakeWorkspaceRemote implements WorkspaceRemote {
     Promise.resolve(remoteOk({ workspace: { ...workspace(String(request.workspaceId)), title: request.title } }))
   onDelete: (_request: WorkspaceDeleteRequest) => Promise<RemoteResult<WorkspaceDeleteValue>> = () =>
     Promise.resolve(remoteOk({ deleted: true }))
+  onDeleteSession: (_request: WorkspaceDeleteSessionRequest) => Promise<RemoteResult<WorkspaceDeleteSessionValue>> = () =>
+    Promise.resolve(remoteOk({ deleted: true }))
   onInsertBefore: (
     request: WorkspaceInsertBeforeRequest,
   ) => Promise<RemoteResult<WorkspaceOrderValue>> = request =>
@@ -116,6 +120,11 @@ class FakeWorkspaceRemote implements WorkspaceRemote {
   delete(request: WorkspaceDeleteRequest): Promise<RemoteResult<WorkspaceDeleteValue>> {
     this.record('delete', request)
     return this.onDelete(request)
+  }
+
+  deleteSession(request: WorkspaceDeleteSessionRequest): Promise<RemoteResult<WorkspaceDeleteSessionValue>> {
+    this.record('deleteSession', request)
+    return this.onDeleteSession(request)
   }
 
   insertBefore(request: WorkspaceInsertBeforeRequest): Promise<RemoteResult<WorkspaceOrderValue>> {
@@ -568,5 +577,19 @@ describe('ClientWorkspaceModel', () => {
     expect(model.getSnapshot().items).toEqual([])
     model.removeView(wid('gone'))
     expect(model.getSnapshot().items).toEqual([])
+  })
+
+  it('permanently deletes a session and clears local references', async () => {
+    const remote = new FakeWorkspaceRemote()
+    const model = modelFor(remote)
+    baseline(model, [workspace('w1', [sid('s1'), sid('s2')])])
+    model.replaceArchived([sid('s1')])
+    model.replacePinned([sid('s1')])
+
+    await expect(model.deleteSession(sid('s1'))).resolves.toEqual(remoteOk({ deleted: true }))
+    expect(remote.calls).toContainEqual({ method: 'deleteSession', request: { sessionId: sid('s1') } })
+    expect(model.getSnapshot().items[0]?.sessionIds).toEqual([sid('s2')])
+    expect(model.getSnapshot().archivedSessionIds).toEqual([])
+    expect(model.getSnapshot().pinnedSessionIds).toEqual([])
   })
 })

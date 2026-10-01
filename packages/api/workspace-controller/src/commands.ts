@@ -1,11 +1,13 @@
 /** Workspace command implementation and stable Remote failure mapping. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import {
   WorkspaceActiveSessionError,
   WorkspaceArchivedSessionPinError,
   WorkspaceId,
+  WorkspaceLiveSessionError,
   WorkspaceMoveInvalidError,
   WorkspaceOrderInvalidError,
   WorkspaceUnknownSessionError,
@@ -18,6 +20,8 @@ import type {
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
+  WorkspaceDeleteSessionRequest,
+  WorkspaceDeleteSessionValue,
   WorkspaceDeleteValue,
   WorkspaceInsertBeforeRequest,
   WorkspaceInsertSessionBeforeRequest,
@@ -224,6 +228,46 @@ export class WorkspaceCommands {
   async unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue> {
     await this.ctx.workspaceRegistry.unpinSession(request.sessionId)
     return { pinnedSessionIds: [...this.ctx.workspaceRegistry.pinnedSessionIds] }
+  }
+
+  /**
+   * Permanently delete one Session's durable log and every registry reference.
+   * A live agent is disposed structurally through the agent registry first.
+   * @param request - Session identity to delete.
+   * @returns deletion receipt.
+   */
+  deleteSession(request: WorkspaceDeleteSessionRequest): Promise<WorkspaceDeleteSessionValue> {
+    return this.enqueue(async () => {
+      const { sessionId } = request
+      const agents = this.ctx.get('agents') as {
+        get(id: SessionId): unknown
+        dispose(id: SessionId): Promise<boolean>
+      } | undefined
+      if (agents?.get(sessionId) !== undefined) {
+        const disposed = await agents.dispose(sessionId)
+        if (!disposed) {
+          throw new RemoteError(
+            'workspace/session-live',
+            `cannot delete session '${sessionId}': it is live without a disposable handle; dispose it first`,
+            { sessionId },
+          )
+        }
+      }
+      try {
+        await this.ctx.workspaceRegistry.deleteSession(sessionId)
+      } catch (error) {
+        if (error instanceof WorkspaceLiveSessionError) {
+          throw new RemoteError(
+            'workspace/session-live',
+            error.message,
+            { sessionId },
+            { cause: error },
+          )
+        }
+        throw error
+      }
+      return { deleted: true }
+    })
   }
 
   private requireWorkspace(workspaceId: WorkspaceId): Workspace {

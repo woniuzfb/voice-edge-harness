@@ -13,6 +13,8 @@ import type {
   WorkspaceCreateRequest,
   WorkspaceCreateValue,
   WorkspaceDeleteRequest,
+  WorkspaceDeleteSessionRequest,
+  WorkspaceDeleteSessionValue,
   WorkspaceDeleteValue,
   WorkspaceFollowFrame,
   WorkspaceInsertBeforeRequest,
@@ -184,6 +186,16 @@ export class WorkspaceController extends TypertRemoteService {
   @Remote('unpinSession')
   unpinSession(request: WorkspaceUnpinSessionRequest): Promise<WorkspacePinValue> {
     return this.commands.unpinSession(request)
+  }
+
+  /**
+   * Delete one Session permanently from storage and registry.
+   * @param request - Session identity to delete.
+   * @returns deletion receipt.
+   */
+  @Remote('deleteSession')
+  deleteSession(request: WorkspaceDeleteSessionRequest): Promise<WorkspaceDeleteSessionValue> {
+    return this.commands.deleteSession(request)
   }
 
   /**

@@ -44,6 +44,10 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
       readonly sessionId: SessionId
       readonly activity: readonly SessionActivity[]
     }
+    /** The Session cannot be deleted because it is currently live without a disposable handle. */
+    'workspace/session-live': {
+      readonly sessionId: SessionId
+    }
     /** The Session or its anchor is not in the Workspace's manual order. */
     'workspace/move-invalid': {
       readonly workspaceId: WorkspaceId
@@ -90,6 +94,16 @@ export interface WorkspaceDeleteRequest {
 
 /** Receipt after one Workspace registration is deleted. */
 export interface WorkspaceDeleteValue {
+  readonly deleted: true
+}
+
+/** Session requested for permanent durable deletion. */
+export interface WorkspaceDeleteSessionRequest {
+  readonly sessionId: SessionId
+}
+
+/** Receipt after one Session is permanently deleted. */
+export interface WorkspaceDeleteSessionValue {
   readonly deleted: true
 }
 

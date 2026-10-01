@@ -507,10 +507,17 @@ export class WorkspaceRegistry extends Service {
         await entity.detachSession(sessionId)
       }
       const state = this.requireState()
-      if (state.archivedSessionIds.includes(sessionId)) {
+      const needsArchivedFilter = state.archivedSessionIds.includes(sessionId)
+      const needsPinnedFilter = state.pinnedSessionIds.includes(sessionId)
+      if (needsArchivedFilter || needsPinnedFilter) {
         await this.setState({
           ...state,
-          archivedSessionIds: state.archivedSessionIds.filter(id => id !== sessionId),
+          pinnedSessionIds: needsPinnedFilter
+            ? state.pinnedSessionIds.filter(id => id !== sessionId)
+            : state.pinnedSessionIds,
+          archivedSessionIds: needsArchivedFilter
+            ? state.archivedSessionIds.filter(id => id !== sessionId)
+            : state.archivedSessionIds,
         })
       }
       this.ctx.emit('workspace/session-deleted', sessionId)
