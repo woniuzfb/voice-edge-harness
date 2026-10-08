@@ -1,5 +1,5 @@
 /** Scheduling policy for post-merge native runtime carriers and Wine. */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import { load } from 'js-yaml'
@@ -9,6 +9,7 @@ import { gatesForMode } from '../run-gates.ts'
 const root = resolve(import.meta.dirname, '../..')
 const masterPush = "github.event_name == 'push' && github.ref == 'refs/heads/master'"
 const runtimeBuilder = './.github/workflows/build-exe-for-python-sdk.yml'
+const hasCiWorkflows = existsSync(resolve(root, '.github/workflows/ci.yml')) && existsSync(resolve(root, '.github/workflows/ci-master.yml'))
 
 interface Job {
   if?: string | boolean
@@ -49,7 +50,7 @@ function evaluateCondition(expression: string, cancelled: boolean, results: stri
   }, { timeout: 1000 }) as boolean
 }
 
-describe('master-only platform scheduling', () => {
+describe.skipIf(!hasCiWorkflows)('master-only platform scheduling', () => {
   it.each(['success', 'failure', 'skipped', 'cancelled'])(
     'reports %s dependencies in active runs but never starts a cancelled-run verdict', (result) => {
       const aggregate = workflow('ci.yml').jobs['all-checks-passed']!

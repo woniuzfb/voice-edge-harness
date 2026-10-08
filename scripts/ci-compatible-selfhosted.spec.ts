@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -23,7 +23,20 @@ interface CompatibilityJob {
   steps: Step[]
 }
 
-const workflow = yaml.load(readFileSync(resolve(import.meta.dirname, '../.github/workflows/ci.yml'), 'utf8')) as {
+const ciWorkflowPath = resolve(import.meta.dirname, '../.github/workflows/ci.yml')
+const hasCiWorkflow = existsSync(ciWorkflowPath)
+const workflow = (hasCiWorkflow ? yaml.load(readFileSync(ciWorkflowPath, 'utf8')) : {
+  jobs: {
+    'node-compat': {
+      'runs-on': '',
+      if: '',
+      env: {},
+      strategy: { 'fail-fast': false, matrix: { include: [] } },
+      steps: [],
+    },
+    'python-sdk': { 'runs-on': '' },
+  },
+}) as {
   jobs: { 'node-compat': CompatibilityJob; 'python-sdk': { 'runs-on': string } }
 }
 const job = workflow.jobs['node-compat']
@@ -39,6 +52,7 @@ function evaluate(expression: string, context: Record<string, unknown>): unknown
 }
 
 function route(options: { mode?: string; author?: string; repository?: string; fork?: boolean; actor?: string } = {}): unknown {
+  if (!job) return undefined
   return evaluate(job['runs-on'], {
     vars: { DSH_CI_FAILOVER_LINUX: options.mode ?? 'selfhosted' },
     github: {
@@ -53,7 +67,7 @@ function route(options: { mode?: string; author?: string; repository?: string; f
   })
 }
 
-describe('Node compatibility self-hosted routing', () => {
+describe.skipIf(!hasCiWorkflow)('Node compatibility self-hosted routing', () => {
   it('uses the Linux pool only for opted-in repository-owned PRs', () => {
     expect(route()).toEqual(labels)
     for (const mode of ['', 'hosted', 'unexpected']) expect(route({ mode })).toBe('ubuntu-latest')

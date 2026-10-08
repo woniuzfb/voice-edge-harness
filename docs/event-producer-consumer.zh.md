@@ -90,7 +90,7 @@
 | `workflow/phase` | `emit` | [`packages/workflow/workflow/src/index.ts:51`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | [`tool-workflow`](../packages/workflow/tool-workflow) |
 | `workflow/start` | `emit` | [`packages/workflow/workflow/src/index.ts:43`](../packages/workflow/workflow/src/index.ts) | [`workflow`](../packages/workflow/workflow) (`events.dispatch`) | [`workflow`](../packages/workflow/workflow) |
 | `workspace/session-activity` | `waterfall` | [`packages/workspace/workspace/src/index.ts:148`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`waterfall`) | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`schedule`](../packages/schedule/schedule), [`subagent`](../packages/subagent/subagent) |
-| `workspace/session-deleted` | `emit` | [`packages/workspace/workspace/src/index.ts:137`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`emit`) | - |
+| `workspace/session-deleted` | `emit` | [`packages/workspace/workspace/src/index.ts:137`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`emit`) | `session-controller` |
 | `workspace/session-stop` | `parallel` | [`packages/workspace/workspace/src/index.ts:166`](../packages/workspace/workspace/src/index.ts) | [`workspace`](../packages/workspace/workspace) (`parallel`) | [`agent`](../packages/core/agent), [`jobs`](../packages/jobs/jobs), [`schedule`](../packages/schedule/schedule), [`subagent`](../packages/subagent/subagent) |
 <!-- END GENERATED event-producer-consumer:events -->
 

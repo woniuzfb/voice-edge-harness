@@ -1,0 +1,245 @@
+name: Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target to package'
+        type: choice
+        options:
+          - all
+          - win-x64
+          - mac-arm64
+        default: all
+      publish_release:
+        description: 'Publish to GitHub Release'
+        type: boolean
+        default: true
+      prerelease:
+        description: 'Mark release as prerelease'
+        type: boolean
+        default: false
+      draft:
+        description: 'Mark release as draft'
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'desktop-v*'
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  build-windows:
+    if: github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'win-x64'
+    name: Package Windows x64
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build repository
+        run: pnpm run build:official
+
+      - name: Configure Windows Desktop Environment
+        shell: bash
+        run: |
+          cat << 'EOF' > apps/desktop/.env.windows
+          DSH_DESKTOP_APP_ID=com.voiceedge.harness
+          DSH_DESKTOP_AUTO_UPDATE_ENV=test
+          DOWNLOAD_TEST_ORIGIN=https://download.deepseek.com
+          DOWNLOAD_TEST_RELEASE_ID=0123456789abcdef0123456789abcdef
+          DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://download.deepseek.com
+          DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=https://download.deepseek.com
+          DSH_DESKTOP_MANDATORY_UPDATE_CONFIG='{"allowedAuthOrigins":["https://login.deepseek.com"]}'
+          EOF
+
+      - name: Package Windows Installer
+        env:
+          DSH_DESKTOP_BUILD_PLUGIN: veh
+        run: pnpm run package:desktop:win:x64:unsigned
+
+      - name: Collect Windows Artifacts
+        shell: bash
+        run: |
+          mkdir -p dist-release
+          cp apps/desktop/.desktop-build/targets/win-x64/artifacts/*.exe dist-release/ 2>/dev/null || true
+          cp apps/desktop/.desktop-build/targets/win-x64/unsigned-artifacts/*.exe dist-release/ 2>/dev/null || true
+          ls -la dist-release/
+
+      - name: Upload Windows Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-windows-x64
+          path: dist-release/*
+          if-no-files-found: error
+
+  build-mac:
+    if: github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'mac-arm64'
+    name: Package macOS (mac-arm64)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          clean: true
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build repository
+        run: pnpm run build:official
+
+      - name: Configure macOS Desktop Environment
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          DSH_DESKTOP_MACOS_SIGNING_IDENTITY: ${{ secrets.DSH_DESKTOP_MACOS_SIGNING_IDENTITY }}
+          DSH_DESKTOP_MACOS_TEAM_ID: ${{ secrets.DSH_DESKTOP_MACOS_TEAM_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat << 'EOF' > apps/desktop/.env.macos
+          DSH_DESKTOP_APP_ID=com.voiceedge.harness
+          DSH_DESKTOP_AUTO_UPDATE_ENV=test
+          DOWNLOAD_TEST_ORIGIN=https://download.deepseek.com
+          DOWNLOAD_TEST_RELEASE_ID=0123456789abcdef0123456789abcdef
+          DSH_DESKTOP_MANDATORY_UPDATE_TEST_ORIGIN=https://download.deepseek.com
+          DSH_DESKTOP_MANDATORY_UPDATE_PROD_ORIGIN=https://download.deepseek.com
+          DSH_DESKTOP_MANDATORY_UPDATE_CONFIG='{"allowedAuthOrigins":["https://login.deepseek.com"]}'
+          EOF
+          if [ -n "$CSC_LINK" ]; then
+            echo "CSC_LINK=$CSC_LINK" >> apps/desktop/.env.macos
+            echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD" >> apps/desktop/.env.macos
+            echo "DSH_DESKTOP_MACOS_SIGNING_IDENTITY=$DSH_DESKTOP_MACOS_SIGNING_IDENTITY" >> apps/desktop/.env.macos
+            echo "DSH_DESKTOP_MACOS_TEAM_ID=$DSH_DESKTOP_MACOS_TEAM_ID" >> apps/desktop/.env.macos
+          fi
+          if [ -n "$APPLE_API_KEY" ]; then
+            echo "APPLE_API_KEY=$APPLE_API_KEY" >> apps/desktop/.env.macos
+            echo "APPLE_API_KEY_ID=$APPLE_API_KEY_ID" >> apps/desktop/.env.macos
+            echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> apps/desktop/.env.macos
+          elif [ -n "$APPLE_ID" ]; then
+            echo "APPLE_ID=$APPLE_ID" >> apps/desktop/.env.macos
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> apps/desktop/.env.macos
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> apps/desktop/.env.macos
+          fi
+
+      - name: Package macOS Desktop App
+        shell: bash
+        env:
+          DSH_DESKTOP_BUILD_PLUGIN: veh
+        run: |
+          if grep -q "CSC_LINK=" apps/desktop/.env.macos; then
+            pnpm run package:desktop:mac:arm64
+          else
+            pnpm run package:desktop:mac:arm64:unsigned
+          fi
+
+      - name: Collect macOS Artifacts
+        shell: bash
+        run: |
+          mkdir -p dist-release
+          cp apps/desktop/.desktop-build/targets/mac-arm64/artifacts/*.dmg dist-release/ 2>/dev/null || true
+          cp apps/desktop/.desktop-build/targets/mac-arm64/unsigned-artifacts/*.dmg dist-release/ 2>/dev/null || true
+          cp apps/desktop/dist/*.dmg dist-release/ 2>/dev/null || true
+          ls -la dist-release/
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: desktop-mac-arm64
+          path: dist-release/*
+          if-no-files-found: error
+
+  publish-release:
+    needs: [build-windows, build-mac]
+    if: |
+      !cancelled() &&
+      !contains(needs.*.result, 'failure') &&
+      (startsWith(github.ref, 'refs/tags/') || github.event.inputs.publish_release == 'true')
+    name: Publish GitHub Release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download Windows Artifacts
+        if: github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'win-x64'
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-windows-x64
+          path: release-binaries
+
+      - name: Download macOS arm64 Artifacts
+        if: github.event_name == 'push' || inputs.target == 'all' || inputs.target == 'mac-arm64'
+        uses: actions/download-artifact@v8
+        with:
+          name: desktop-mac-arm64
+          path: release-binaries
+
+      - name: Verify and List Release Binaries
+        shell: bash
+        run: |
+          if [ ! -d "release-binaries" ]; then
+            echo "::error::release-binaries directory does not exist! No artifacts were downloaded." >&2
+            exit 1
+          fi
+          ls -la release-binaries/
+
+          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.target }}" == "all" || "${{ inputs.target }}" == "win-x64" ]]; then
+            win_count=$(find release-binaries -maxdepth 1 -name "*.exe" | wc -l)
+            if [ "$win_count" -eq 0 ]; then
+              echo "::error::Missing Windows installer (*.exe) in release binaries!" >&2
+              exit 1
+            fi
+          fi
+
+          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.target }}" == "all" || "${{ inputs.target }}" == "mac-arm64" ]]; then
+            mac_count=$(find release-binaries -maxdepth 1 -name "*.dmg" | wc -l)
+            if [ "$mac_count" -eq 0 ]; then
+              echo "::error::Missing macOS artifact (*.dmg) in release binaries!" >&2
+              exit 1
+            fi
+          fi
+
+      - name: Publish to GitHub Release
+        uses: softprops/action-gh-release@v3
+        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.publish_release == 'true'
+        with:
+          files: |
+            release-binaries/*.exe
+            release-binaries/*.dmg
+          draft: ${{ github.event.inputs.draft == 'true' }}
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          generate_release_notes: true

@@ -22,6 +22,14 @@
       "types": "./lib/types/invariant.d.ts",
       "default": "./lib/invariant.js"
     },
+    "./interceptor": {
+      "types": "./lib/types/interceptor.d.ts",
+      "default": "./lib/interceptor.js"
+    },
+    "./register": {
+      "types": "./lib/types/register.d.ts",
+      "default": "./lib/register.js"
+    },
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
@@ -32,6 +40,8 @@
   "files": [
     "lib/index.js",
     "lib/invariant.js",
+    "lib/interceptor.js",
+    "lib/register.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],

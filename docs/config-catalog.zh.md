@@ -303,7 +303,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-api-workspace-controller`
 
 - `inject`: `typert` · `workspaceRegistry`
-- `source`: [`packages/api/workspace-controller/src/index.ts:33`](../packages/api/workspace-controller/src/index.ts)
+- `source`: [`packages/api/workspace-controller/src/index.ts:35`](../packages/api/workspace-controller/src/index.ts)
 
 ```ts config-catalog
 /** First-use directory policy for the Host account. */
@@ -4098,7 +4098,7 @@ export type ApprovalPolicy = 'ask' | 'never'
 ## `@deepseek-ai/dsh-voice-edge`
 
 - `inject`: `webServer` · `agents` · `tools` · `sessions`
-- `source`: [`packages/host/voice-edge/src/index.ts:56`](../packages/host/voice-edge/src/index.ts)
+- `source`: [`packages/host/voice-edge/src/index.ts:64`](../packages/host/voice-edge/src/index.ts)
 
 ```ts config-catalog
 /** Plugin configuration. The token is the only required value. */

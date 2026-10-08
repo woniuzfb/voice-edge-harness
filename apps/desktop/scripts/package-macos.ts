@@ -1,6 +1,7 @@
 /** Build the ZIP and DMG from separate signed application copies with overlapping notarization. */
 
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
 import { mkdtemp, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { promisify } from 'node:util'
@@ -16,6 +17,7 @@ import {
 } from './desktop-auto-update-environment.mjs'
 import { verifyMacOSAppUpdateConfig } from './macos-app-update-config.mjs'
 import { verifyMacOSNotarizedApplication, verifyMacOSSignature } from './verify-macos-signature.mjs'
+import { resolveDesktopBuildPlugin } from './desktop-build-plugin.mjs'
 
 const execute = promisify(execFile)
 
@@ -78,7 +80,14 @@ export async function packageMacOSArtifacts(
   const expected = resolveMacOSSigningEnvironment(environment)
   const credentials = resolveMacOSNotarizationEnvironment(environment)
   const update = resolveDesktopAutoUpdateConfig(environment, 'darwin', arch)
-  const appPath = join(artifactsRoot, arch === 'arm64' ? 'mac-arm64' : 'mac', 'DeepSeek Harness.app')
+  const plugin = resolveDesktopBuildPlugin(environment)
+  const productName = plugin?.productName ?? 'DeepSeek Harness'
+  const targetDir = arch === 'arm64' ? 'mac-arm64' : 'mac'
+  const appPath = existsSync(join(artifactsRoot, targetDir, `${productName}.app`))
+    ? join(artifactsRoot, targetDir, `${productName}.app`)
+    : (existsSync(join(artifactsRoot, targetDir, 'DeepSeek Harness.app'))
+      ? join(artifactsRoot, targetDir, 'DeepSeek Harness.app')
+      : join(artifactsRoot, targetDir, `${productName}.app`))
   const root = await mkdtemp(join(dirname(artifactsRoot), 'notarization-'))
   const zipApp = join(root, 'zip', basename(appPath))
   const dmgApp = join(root, 'dmg', basename(appPath))
@@ -110,7 +119,11 @@ export async function packageMacOSArtifacts(
     await verifyMacOSAppUpdateConfig(dmgApp, update)
     apple.verifySignature(zipApp, expected)
     apple.verifySignature(dmgApp, expected)
-    const base = `deepseek-harness-${version}-mac-${arch}`
+    const defaultBase = `deepseek-harness-${version}-mac-${arch}`
+    const pluginBase = `veh-${version}-mac-${arch}`
+    const base = existsSync(join(dmgOutput, `${defaultBase}.dmg`))
+      ? defaultBase
+      : (existsSync(join(dmgOutput, `${pluginBase}.dmg`)) ? pluginBase : defaultBase)
     const artifacts = [
       [dmgOutput, `${base}.dmg`],
       [zipOutput, `${base}.zip`],

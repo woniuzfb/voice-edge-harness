@@ -1,3 +1,4 @@
+import './veh-interceptor.ts'
 /** Launch the Desktop profile through the Web application and report its URL to Electron. */
 
 import { delimiter, join } from 'node:path'

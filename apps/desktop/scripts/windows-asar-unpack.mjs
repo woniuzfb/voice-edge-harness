@@ -3,6 +3,7 @@ import { cp, lstat, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { readAsar } from 'app-builder-lib/out/asar/asar.js'
 import { windowsRuntimeCode } from './windows-runtime-signature.mjs'
+import { resolveDesktopBuildPlugin } from './desktop-build-plugin.mjs'
 
 function inside(root, file) {
   const suffix = relative(root, file)
@@ -32,7 +33,10 @@ export async function prepareWindowsAsarUnpack(context, sourceRoot) {
     const parent = join(appDir, '.desktop-build')
     await mkdir(parent, { recursive: true })
     const stage = await mkdtemp(join(parent, 'asar-source-'))
-    copyRoot = join(stage, 'dsh')
+    const plugin = resolveDesktopBuildPlugin(process.env)
+    const mapping = config.files?.find(file => typeof file === 'object' && typeof file.to === 'string' && (file.to.startsWith('dsh') || file.to.startsWith('veh')))
+    const destDir = typeof mapping === 'object' && typeof mapping.to === 'string' ? mapping.to.split('/')[0] : (plugin?.runtimeDirName ?? 'dsh')
+    copyRoot = join(stage, destDir)
     info.disposeOnBuildFinish(() => rm(stage, { recursive: true, force: true }))
     await cp(sourceRoot, copyRoot, { recursive: true, force: false, errorOnExist: true })
     config.files = config.files.map(file => {
@@ -56,12 +60,21 @@ export async function prepareWindowsAsarUnpack(context, sourceRoot) {
  */
 export async function verifyWindowsAsarUnpack(sourceRoot, resourcesDir, files) {
   const archive = await readAsar(join(resourcesDir, 'app.asar'))
+  const plugin = resolveDesktopBuildPlugin(process.env)
+  let targetPrefix = plugin?.runtimeDirName ?? 'dsh'
+  try {
+    if (archive.getNode(targetPrefix) === undefined) {
+      targetPrefix = archive.getNode('veh') ? 'veh' : 'dsh'
+    }
+  } catch {
+    targetPrefix = 'dsh'
+  }
   for (const file of files) {
-    const entry = archive.getFile(join('dsh', file), false)
+    const entry = archive.getFile(join(targetPrefix, file), false)
     if (entry.unpacked !== true || entry.link !== undefined) {
       throw new Error(`Windows ASAR: PE must be unpacked: ${file}`)
     }
-    const copied = join(resourcesDir, 'app.asar.unpacked', 'dsh', file)
+    const copied = join(resourcesDir, 'app.asar.unpacked', targetPrefix, file)
     const stat = await lstat(copied)
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Windows ASAR: expected a real PE file: ${file}`)
     const [prepared, packaged] = await Promise.all([readFile(join(sourceRoot, file)), readFile(copied)])

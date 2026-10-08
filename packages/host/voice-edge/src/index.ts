@@ -46,8 +46,16 @@ import type {
   VoiceEdgeToolExecuteRequest,
   VoiceEdgeToolResult,
 } from './types.ts'
+import { installVehInterceptor } from './interceptor.ts'
 
 export type * from './types.ts'
+export {
+  getVehHome,
+  installVehInterceptor,
+  isVehInterceptorInstalled,
+  migrateDshToVeh,
+} from './interceptor.ts'
+export type { VehInterceptorOptions } from './interceptor.ts'
 
 export const name = 'voice-edge'
 export const inject = ['webServer', 'agents', 'tools', 'sessions']
@@ -204,6 +212,8 @@ function projectMessages(messages: unknown): VoiceEdgeMessageProjection[] {
 /** Register the HTTP surface and conversation registry. */
 export function apply(ctx: Context, config: Config): void {
   if (!config.token) throw new Error('voice-edge: config.token must be a non-empty shared secret')
+  const uninstallInterceptor = installVehInterceptor()
+  ctx.effect(() => () => { uninstallInterceptor() })
   const base = config.path.replace(/\/+$/, '') || '/'
   const conversations = new Map<string, Conversation>()
   /** boot/full/conversation key aliases -> canonical conversation key. */

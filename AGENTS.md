@@ -159,6 +159,10 @@ Real-API tests/demos read `DEEPSEEK_API_KEY`, optional `DEEPSEEK_BASE_URL`, and 
 - **Plan unit, e2e, and snapshot coverage** for capability seams, lifecycle paths, and transcript output; include missing snapshot-harness support in the same change.
 - **Both SDKs project the loop.** Agent-loop, session-lifecycle, and `SessionEventMap` changes update the TypeScript and Python SDK expected outputs in the same PR; `pnpm run test` covers neither ([surfaces](docs/testing.md#when-a-snapshot-test-is-required)).
 - **Choose PR history deliberately.** Split independent changes and fix the introducing PR before propagation. Standalone/stack branches may merge-forward or rebase. Rewrites use `--force-with-lease`, abort on remote movement, never raw `--force`; preserve an in-progress merge-forward checkpoint before taking a newer base ([rationale](.agents/notes/implemented/process/2026-08-02-native-github-stacks-and-optional-rebases.md)).
+- **Never commit without explicit user instruction.** Agents must NEVER run `git commit` unless explicitly instructed by the user (`commit` or `提交`). Keep changes uncommitted in the working tree for user inspection.
+- **Never overwrite uncommitted changes.** 禁止使用 git checkout 命令或者读取 HEAD 覆写工作区未保存的文件。Agents must never run `git checkout` or read HEAD to discard or overwrite uncommitted files in the working tree.
+- **Packaging-only workflows.** `.github/workflows/` retains only release workflows (`desktop-release.yml`, `release.yml`, `python-release.yml`, etc.); CI and PR automation are handled externally.
+- **Agent memory.** Record persistent repository rules and knowledge in `.memory/MEMORY.md`, and dated notes in `.memory/YYYY-MM-DD.md`.
 - **Labels:** one PR `kind/*`, all material `area/*`, and native Issue Type ([taxonomy](.agents/notes/implemented/process/2026-08-08-unified-github-label-taxonomy.md)).
 - TODO markers: `FIXME`/`TODO`/`XXX` by urgency ([semantics](docs/development.md)).
 - Files end with exactly one trailing newline; `git diff --cached --check` (pre-commit) gates it.

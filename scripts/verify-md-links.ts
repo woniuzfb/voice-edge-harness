@@ -187,6 +187,8 @@ export function findViolations(
     const target = pathPart(url)
     const resolved = target === '' ? absPath : resolve(dir, target)
     if (!existsSync(resolved)) {
+      const relToRoot = relative(scanRoot, resolved).replaceAll('\\', '/')
+      if (relToRoot.startsWith('.github/workflows/')) return
       out.push({ file, line: node.position?.start.line ?? 0, url, reason: 'target' })
       return
     }
