@@ -15,13 +15,14 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Session, SessionEvent, SessionSeedEventState } from '@deepseek-ai/dsh-session'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, AgentSetup } from '@deepseek-ai/dsh-agent'
 import ToolRuntime, { defineTool } from '@deepseek-ai/dsh-tools'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import WebServer from '@deepseek-ai/dsh-host-webserver'
-import JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import * as JsonlPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import type { SessionHandle } from '@deepseek-ai/dsh-session-persistence'
 import * as VoiceEdge from '../src/index.ts'
 
@@ -58,6 +59,7 @@ async function boot(options: { roster?: boolean; preset?: string; persist?: stri
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-session'",
+    "- name: '@deepseek-ai/dsh-session-projection'",
     "- name: '@deepseek-ai/dsh-agent'",
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
@@ -84,6 +86,7 @@ async function boot(options: { roster?: boolean; preset?: string; persist?: stri
   ctx.loader.builtins.include = Include
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-session', SessionStore],
+    ['@deepseek-ai/dsh-session-projection', SessionProjectionRegistry],
     ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
@@ -145,11 +148,12 @@ async function boot(options: { roster?: boolean; preset?: string; persist?: stri
       id: session.id,
       options: {},
       session,
+      model: {} as never,
       inbox: { nextTurn: [], nextStep: [] } as never,
       status: 'idle',
       ctx: scope.ctx,
       followup: () => {},
-      steer: () => {},
+      steer: () => ({ outcome: Promise.resolve({ status: 'rejected' as const }) }),
       inject: () => {},
       send: () => {},
       cancel() {},

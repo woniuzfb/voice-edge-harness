@@ -34,9 +34,6 @@
     },
     {
       "path": "../../host/voice-edge"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

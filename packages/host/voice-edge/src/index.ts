@@ -35,7 +35,8 @@ import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-agent-preset'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type {} from '@deepseek-ai/dsh-session-persistence'
-import type {} from '@deepseek-ai/dsh-tools'
+import { ToolExecutorUnavailableError } from '@deepseek-ai/dsh-tools'
+import { ToolExecutionPipeline, executeToolBatch } from '@deepseek-ai/dsh-tools/pipeline'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {
   VoiceEdgeAck,
@@ -238,6 +239,7 @@ export function apply(ctx: Context, config: Config): void {
   /** sessionId -> conversation, for the approval answerer. */
   const bySessionId = new Map<string, Conversation>()
   const expectedAuth = Buffer.from(`Bearer ${config.token}`)
+  const fallbackPipeline = new ToolExecutionPipeline(ctx)
 
   // A durable delete (workspace.deleteSession) structurally disposes the agent
   // through the registry; drop the bound conversation here so the next Python
@@ -553,28 +555,46 @@ export function apply(ctx: Context, config: Config): void {
     const callId = asString(request.call_id)
     const toolName = asString(request.name)
     if (!callId || !toolName) throw new HttpError(400, 'call_id and name are required', 'missing_call')
+    const rawArgs = request.arguments ?? {}
     convo.agent.session.append('voice-edge/tool-call', {
       callId,
       name: toolName,
-      arguments: request.arguments ?? {},
+      arguments: rawArgs,
     })
     const started = Date.now()
-    const result = await ctx.tools.execute({
-      callId: ToolCallId(callId),
-      name: toolName,
-      arguments: request.arguments ?? {},
+    const batchInput = {
+      calls: [{
+        type: 'tool-call' as const,
+        id: ToolCallId(callId),
+        name: toolName,
+        arguments: typeof rawArgs === 'string' ? rawArgs : JSON.stringify(rawArgs),
+      }],
       agent: convo.agent,
       signal: AbortSignal.timeout(config.toolTimeoutMs),
-    })
-    const text = flattenContent(result.content)
+    }
+    let batch
+    try {
+      batch = await ctx.tools.execute(batchInput)
+    } catch (error) {
+      if (error instanceof ToolExecutorUnavailableError) {
+        batch = await executeToolBatch(batchInput, fallbackPipeline, () => 1)
+      } else {
+        throw error
+      }
+    }
+    const outcome = batch.results[0]?.result
+    if (outcome === undefined) {
+      throw new HttpError(500, 'voice-edge: tool batch returned no result', 'internal')
+    }
+    const text = flattenContent(outcome.content)
     convo.agent.session.append('voice-edge/tool-result', {
       callId,
       name: toolName,
-      isError: result.isError,
+      isError: outcome.isError,
       text,
       durationMs: Date.now() - started,
     })
-    return { isError: result.isError, text }
+    return { isError: outcome.isError, text }
   }
 
   /** POST {base}/tool/execute — run one Harness tool and return only its result. */
