@@ -47,6 +47,10 @@ import type {
   VoiceEdgeToolResult,
 } from './types.ts'
 import { installVehInterceptor } from './interceptor.ts'
+import {
+  installBrandFetchRewrite,
+  installBrandRewrite,
+} from './brand.ts'
 
 export type * from './types.ts'
 export {
@@ -56,6 +60,15 @@ export {
   migrateDshToVeh,
 } from './interceptor.ts'
 export type { VehInterceptorOptions } from './interceptor.ts'
+export {
+  BRAND_RULES,
+  installBrandFetchRewrite,
+  installBrandRewrite,
+  rewriteBrandText,
+  rewriteChatRequestBody,
+  rewriteGenerateOptions,
+} from './brand.ts'
+export type { BrandRewriteResult, BrandRule } from './brand.ts'
 
 export const name = 'voice-edge'
 export const inject = ['webServer', 'agents', 'tools', 'sessions']
@@ -214,6 +227,10 @@ export function apply(ctx: Context, config: Config): void {
   if (!config.token) throw new Error('voice-edge: config.token must be a non-empty shared secret')
   const uninstallInterceptor = installVehInterceptor()
   ctx.effect(() => () => { uninstallInterceptor() })
+  const uninstallBrandRewrite = installBrandRewrite(ctx)
+  ctx.effect(() => () => { uninstallBrandRewrite() })
+  const uninstallBrandFetchRewrite = installBrandFetchRewrite()
+  ctx.effect(() => () => { uninstallBrandFetchRewrite() })
   const base = config.path.replace(/\/+$/, '') || '/'
   const conversations = new Map<string, Conversation>()
   /** boot/full/conversation key aliases -> canonical conversation key. */
