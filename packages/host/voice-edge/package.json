@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-voice-edge",
   "description": "Voice Edge bridge: mirrors voice_edge.py turns into Harness sessions and executes Harness tools over HTTP",
-  "version": "0.2.2-rc.3",
+  "version": "0.2.2-rc.5",
   "publishConfig": {
     "access": "public"
   },
